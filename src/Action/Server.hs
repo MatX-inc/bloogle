@@ -103,7 +103,7 @@ replyServer log local links haddock store cdn home htmlDir scope Input{..} = cas
             Nothing | qSource /= [] -> fmap OutputHTML $ templateRender templateIndex
                         [("tags", html $ tagOptions qScope)
                         ,("body", html body)
-                        ,("title", text $ unwords qSource ++ " - Hoogle")
+                        ,("title", text $ unwords qSource ++ " - Bloogle")
                         ,("search", text $ unwords qSearch)
                         ,("robots", text $ if any isQueryScope q then "none" else "index")]
                     | otherwise -> OutputHTML <$> templateRender templateHome []
@@ -171,7 +171,7 @@ replyServer log local links haddock store cdn home htmlDir scope Input{..} = cas
             ,("version", text $ showVersion version ++ " " ++ showUTCTime "%Y-%m-%d %H:%M" spawned)]
         templateIndex = templateFile (htmlDir </> "index.html") `templateApply` params
         templateEmpty = templateFile (htmlDir </>  "welcome.html")
-        templateHome = templateIndex `templateApply` [("tags",html $ tagOptions []),("body",templateEmpty),("title",text "Hoogle"),("search",text ""),("robots",text "index")]
+        templateHome = templateIndex `templateApply` [("tags",html $ tagOptions []),("body",templateEmpty),("title",text "Bloogle"),("search",text ""),("robots",text "index")]
         templateLog = templateFile (htmlDir </> "log.html") `templateApply` params
         templateLogJs = templateFile (htmlDir </> "log.js") `templateApply` params
 

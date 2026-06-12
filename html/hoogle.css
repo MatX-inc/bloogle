@@ -32,7 +32,7 @@ a:hover {
 }
 
 a {
-    color: #C4451D;
+    color: #1565c0;
     text-decoration: none;
 }
 
@@ -41,8 +41,8 @@ a {
 */
 
 #links {
-    background: none repeat scroll 0 0 #293845;
-    border-top: 5px solid #4E6272;
+    background: none repeat scroll 0 0 #0d2d52;
+    border-top: 5px solid #1565c0;
     color: #DDDDDD;
     text-align: right;
     padding: 0.2em;
@@ -72,7 +72,7 @@ a {
 }
 
 #top-menu li a:hover {
-    background-color: #4e6272;
+    background-color: #1565c0;
     text-decoration: underline;
 }
 
@@ -80,8 +80,27 @@ form {
     margin-bottom: 0px;
 }
 
-#logo img {
+#logo {
+    display: inline-block;
     vertical-align: bottom;
+    width: 160px;
+    text-align: center;
+}
+
+#logo:hover {
+    background: none;
+}
+
+.logo-text {
+    font-size: 38px;
+    font-weight: bold;
+    line-height: 58px;
+    color: #0d2d52;
+    letter-spacing: -1px;
+}
+
+.logo-text::first-letter {
+    color: #1565c0;
 }
 
 #hoogle, #scope, #scope_chosen, #submit {
@@ -141,7 +160,7 @@ form {
 }
 
 #left a {
-    color: #C4451D;
+    color: #1565c0;
     text-decoration: none;
     background-repeat: no-repeat;
 }
@@ -268,7 +287,7 @@ a.dull, a.dull:hover {
     color: black;
 }
 .ans .name {
-    color: #C4451D;
+    color: #1565c0;
 }
 
 .links {
