@@ -154,15 +154,6 @@ readHaskellDirs timing settings dirs = do
         sets = map setFromDir $ filter (`isPrefixOf` file) dirs
         setFromDir dir = (strPack "set", strPack $ takeFileName $ dropTrailingPathSeparator dir)
 
-readFregeOnline :: Timing -> Download -> IO (Map.Map PkgName Package, Set.Set PkgName, ConduitT () (PkgName, URL, LBStr) IO ())
-readFregeOnline timing download = do
-    frege <- download "frege-frege.txt" "https://github.com/Frege/try-frege/raw/refs/heads/master/try-frege-web/src/main/webapp/hoogle-frege.txt"
-    let source = do
-            src <- liftIO $ bstrReadFile frege
-            yield (mkPackageName "frege", "http://google.com/", lbstrFromChunks [src])
-    pure (Map.empty, Set.singleton $ mkPackageName "frege", source)
-
-
 readHaskellGhcpkg :: Timing -> Settings -> IO (Map.Map PkgName Package, Set.Set PkgName, ConduitT () (PkgName, URL, LBStr) IO ())
 readHaskellGhcpkg timing settings = do
     cbl <- timed timing "Reading ghc-pkg" $ readGhcPkg settings
@@ -235,18 +226,17 @@ actionGenerate g@Generate{..} = withTiming (if debug then Just $ replaceExtensio
           downloadInput timing insecure download' (takeDirectory database) name url
 
     settings <- loadSettings
-    (cbl, want, source) <- case language of
-        Haskell | Just dir <- haddock -> do
-                    warnFlagIgnored "--haddock" "set" (local_ /= []) "--local"
-                    warnFlagIgnored "--haddock" "set" (isJust download) "--download"
-                    readHaskellHaddock timing settings dir
-                | [""] <- local_ -> do
-                    warnFlagIgnored "--local" "used as flag (no paths)" (isJust download) "--download"
-                    readHaskellGhcpkg timing settings
-                | [] <- local_ -> do readHaskellOnline timing settings doDownload
-                | otherwise -> readHaskellDirs timing settings local_
-        Frege | [] <- local_ -> readFregeOnline timing doDownload
-              | otherwise -> errorIO "No support for local Frege databases"
+    (cbl, want, source) <- case haddock of
+        Just dir -> do
+            warnFlagIgnored "--haddock" "set" (local_ /= []) "--local"
+            warnFlagIgnored "--haddock" "set" (isJust download) "--download"
+            readHaskellHaddock timing settings dir
+        Nothing
+            | [""] <- local_ -> do
+                warnFlagIgnored "--local" "used as flag (no paths)" (isJust download) "--download"
+                readHaskellGhcpkg timing settings
+            | [] <- local_ -> readHaskellOnline timing settings doDownload
+            | otherwise -> readHaskellDirs timing settings local_
     (cblErrs, popularity) <- evaluate $ packagePopularity cbl
     cbl <- evaluate $ Map.map (\p -> p{packageDepends=[]}) cbl -- clear the memory, since the information is no longer used
     evaluate popularity

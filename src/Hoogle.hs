@@ -31,7 +31,7 @@ withDatabase file act = storeReadFile file $ act . Database
 
 -- | The default location of a database
 defaultDatabaseLocation :: IO FilePath
-defaultDatabaseLocation = defaultDatabaseLang Haskell
+defaultDatabaseLocation = defaultDatabase
 
 -- | Search a database, given a query string, produces a list of results.
 searchDatabase :: Database -> String -> [Target]

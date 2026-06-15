@@ -2,8 +2,8 @@
 {-# OPTIONS_GHC -fno-warn-missing-fields -fno-cse #-}
 
 module Action.CmdLine(
-    CmdLine(..), Language(..),
-    getCmdLine, defaultDatabaseLang,
+    CmdLine(..),
+    getCmdLine, defaultDatabase,
     defaultGenerate,
     whenLoud, whenNormal
     ) where
@@ -18,8 +18,6 @@ import System.Environment
 import System.FilePath
 import System.IO
 
-data Language = Haskell | Frege deriving (Data,Typeable,Show,Eq,Enum,Bounded)
-
 data CmdLine
     = Search
         {color :: Maybe Bool
@@ -31,9 +29,7 @@ data CmdLine
         ,database :: FilePath
         ,count :: Maybe Int
         ,query :: [String]
-        ,repeat_ :: Int
-        ,language :: Language
-        ,compare_ :: [String]
+        ,repeat_ :: Int        ,compare_ :: [String]
         }
     | Generate
         {download :: Maybe Bool
@@ -43,18 +39,14 @@ data CmdLine
         ,count :: Maybe Int
         ,local_ :: [FilePath]
         ,haddock :: Maybe FilePath
-        ,debug :: Bool
-        ,language :: Language
-        }
+        ,debug :: Bool        }
     | Server
         {port :: Int
         ,database :: FilePath
         ,logs :: FilePath
         ,local :: Bool
         ,haddock :: Maybe FilePath
-        ,links :: Bool
-        ,language :: Language
-        ,scope :: String
+        ,links :: Bool        ,scope :: String
         ,home :: String
         ,host :: String
         ,https :: Bool
@@ -66,20 +58,17 @@ data CmdLine
     | Replay
         {logs :: FilePath
         ,database :: FilePath
-        ,repeat_ :: Int
-        ,language :: Language
-        ,scope :: String
+        ,repeat_ :: Int        ,scope :: String
         }
     | Test
         { deep :: Bool
         , disable_network_tests  :: Bool
         , database :: FilePath
-        , language :: Language
         }
       deriving (Data,Typeable,Show)
 
-defaultDatabaseLang :: Language -> IO FilePath
-defaultDatabaseLang lang = do
+defaultDatabase :: IO FilePath
+defaultDatabase = do
     xdgLocation <- getXdgDirectory XdgData "hoogle"
     legacyLocation <- getAppUserDataDirectory "hoogle"
     doesXdgPathExist <- doesPathExist xdgLocation
@@ -99,7 +88,7 @@ defaultDatabaseLang lang = do
         --hPutStrLn stderr $ "Warning: " ++ legacyLocation ++ " is deprecated."
         --  ++ "Consider moving it to $XDG_DATA_HOME/hoogle (" ++ xdgLocation ++ ")"
         pure legacyLocation
-    pure $ dir </> "default-" ++ lower (show lang) ++ "-" ++ showVersion (trimVersion 3 version) ++ ".hoo"
+    pure $ dir </> "default-" ++ showVersion (trimVersion 3 version) ++ ".hoo"
 
 getCmdLine :: [String] -> IO CmdLine
 getCmdLine args = do
@@ -107,7 +96,7 @@ getCmdLine args = do
 
     -- fill in the default database
     args <- if database args /= "" then pure args else do
-        db <- defaultDatabaseLang $ language args; pure args{database=db}
+        db <- defaultDatabase; pure args{database=db}
 
     -- fix up people using Hoogle 4 instructions
     args <- case args of
@@ -120,7 +109,7 @@ getCmdLine args = do
 
 
 defaultGenerate :: CmdLine
-defaultGenerate = generate{language=Haskell}
+defaultGenerate = generate
 
 
 cmdLineMode = cmdArgsMode $ modes [search_ &= auto,generate,server,replay,test]
@@ -138,7 +127,6 @@ search_ = Search
     ,count = Nothing &= name "n" &= help "Maximum number of results to return (defaults to 10)"
     ,query = def &= args &= typ "QUERY"
     ,repeat_ = 1 &= help "Number of times to repeat (for benchmarking)"
-    ,language = enum [x &= explicit &= name (lower $ show x) &= help ("Work with " ++ show x) | x <- enumerate] &= groupname "Language"
     ,compare_ = def &= help "Type signatures to compare against"
     } &= help "Perform a search"
 
