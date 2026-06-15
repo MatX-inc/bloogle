@@ -24,9 +24,7 @@ import Output.Names
 import Output.Types
 import Input.Cabal
 import Input.Haddock
-import Input.Download
 import Input.Reorder
-import Input.Set
 import Input.Settings
 import Input.Item
 import General.Util
@@ -90,37 +88,6 @@ generate output metadata = ...
 -- @tagsoup -- generate tagsoup
 -- @tagsoup filter -- search the tagsoup package
 -- filter -- search all
-
-type Download = String -> URL -> IO FilePath
-
-readHaskellOnline :: Timing -> Settings -> Download -> IO (Map.Map PkgName Package, Set.Set PkgName, ConduitT () (PkgName, URL, LBStr) IO ())
-readHaskellOnline timing settings download = do
-    stackageLts <- download "haskell-stackage-lts.txt" "https://www.stackage.org/lts/cabal.config"
-    stackageNightly <- download "haskell-stackage-nightly.txt" "https://www.stackage.org/nightly/cabal.config"
-    platform <- download "haskell-platform.txt" "https://raw.githubusercontent.com/haskell/haskell-platform/master/hptool/src/Releases2015.hs"
-    cabals   <- download "haskell-cabal.tar.gz" "https://hackage.haskell.org/packages/index.tar.gz"
-    hoogles  <- download "haskell-hoogle.tar.gz" "https://hackage.haskell.org/packages/hoogle.tar.gz"
-
-    -- peakMegabytesAllocated = 2
-    setStackage <- Set.map mkPackageName <$> (Set.union <$> setStackage stackageLts <*> setStackage stackageNightly)
-    setPlatform <- Set.map mkPackageName <$> setPlatform platform
-    setGHC <- Set.map mkPackageName <$> setGHC platform
-
-    cbl <- timed timing "Reading Cabal" $ parseCabalTarball settings cabals
-    let want = Set.insert (mkPackageName "ghc") $ Set.unions [setStackage, setPlatform, setGHC]
-    cbl <- pure $ flip Map.mapWithKey cbl $ \name p ->
-        p{packageTags =
-            [(strPack "set",strPack "included-with-ghc") | name `Set.member` setGHC] ++
-            [(strPack "set",strPack "haskell-platform") | name `Set.member` setPlatform] ++
-            [(strPack "set",strPack "stackage") | name `Set.member` setStackage] ++
-            packageTags p}
-
-    let source = do
-            tar <- liftIO $ tarballReadFiles hoogles
-            forM_ tar $ \(mkPackageName . takeBaseName -> name, src) ->
-                yield (name, hackagePackageURL name, src)
-    pure (cbl, want, source)
-
 
 readHaskellDirs :: Timing -> Settings -> [FilePath] -> IO (Map.Map PkgName Package, Set.Set PkgName, ConduitT () (PkgName, URL, LBStr) IO ())
 readHaskellDirs timing settings dirs = do
@@ -218,24 +185,14 @@ actionGenerate g@Generate{..} = withTiming (if debug then Just $ replaceExtensio
     let warnFlagIgnored thisFlag reason ignoredFlagPred ignoredFlag =
           when ignoredFlagPred $ putStrLn $ "Warning: " <> thisFlag <> " is " <> reason <> ", which means " <> ignoredFlag <> " is ignored."
 
-    let doDownload name url = do
-          let download' = case download of
-                Just True -> AlwaysDownloadInput
-                Just False -> NeverDownloadInput
-                Nothing -> DownloadInputIfNotThere
-          downloadInput timing insecure download' (takeDirectory database) name url
-
     settings <- loadSettings
     (cbl, want, source) <- case haddock of
         Just dir -> do
             warnFlagIgnored "--haddock" "set" (local_ /= []) "--local"
-            warnFlagIgnored "--haddock" "set" (isJust download) "--download"
             readHaskellHaddock timing settings dir
         Nothing
-            | [""] <- local_ -> do
-                warnFlagIgnored "--local" "used as flag (no paths)" (isJust download) "--download"
-                readHaskellGhcpkg timing settings
-            | [] <- local_ -> readHaskellOnline timing settings doDownload
+            | [""] <- local_ -> readHaskellGhcpkg timing settings
+            | [] <- local_ -> errorIO "Nothing to index: pass --local DIR (a directory of Hoogle .txt files) or --haddock DIR. (Generating from Hackage/Stackage online is no longer supported.)"
             | otherwise -> readHaskellDirs timing settings local_
     (cblErrs, popularity) <- evaluate $ packagePopularity cbl
     cbl <- evaluate $ Map.map (\p -> p{packageDepends=[]}) cbl -- clear the memory, since the information is no longer used
@@ -271,7 +228,7 @@ actionGenerate g@Generate{..} = withTiming (if debug then Just $ replaceExtensio
                             liftIO $ whenNormal $ when (missing /= []) $ do
                                 putStrLn $ "Packages missing documentation: " ++ unwords (sortOn lower $ map unPackageName missing)
                             liftIO $ when (Set.null seen) $
-                                exitFail "No packages were found, aborting (use no arguments to index all of Stackage)"
+                                exitFail "No packages were found, aborting (pass --local DIR or --haddock DIR)"
                             -- synthesise things for Cabal packages that are not documented
                             forM_ (Map.toList cbl) $ \(name, Package{..}) -> when (name `Set.notMember` seen) $ do
                                 let ret prefix = yield $ fakePackage name $ prefix ++ trim (strUnpack packageSynopsis)

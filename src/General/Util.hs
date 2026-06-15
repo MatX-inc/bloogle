@@ -5,7 +5,6 @@ module General.Util(
     URL,
     pretty, parseMode, applyType, applyFun1, unapplyFun, fromName, fromQName, fromTyVarBind, declNames, isTypeSig,
     fromDeclHead, fromContext, fromIParen, fromInstHead,
-    tarballReadFiles,
     isUpper1, isAlpha1,
     joinPair,
     testing, testEq,
@@ -39,8 +38,6 @@ import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Map as Map
 import Data.Ix
 import Numeric.Extra
-import Codec.Compression.GZip as GZip
-import Codec.Archive.Tar as Tar
 import Data.Time.Clock
 import Data.Time.Format
 import Control.DeepSeq
@@ -199,15 +196,6 @@ isTypeSig :: Decl a -> Bool
 isTypeSig TypeSig{} = True
 isTypeSig PatSynSig{} = True
 isTypeSig _ = False
-
-
-tarballReadFiles :: FilePath -> IO [(FilePath, LBS.ByteString)]
-tarballReadFiles file = f . Tar.read . GZip.decompress <$> LBS.readFile file
-    where
-        f (Next e rest) | NormalFile body _ <- entryContent e = (entryPath e, body) : f rest
-        f (Next _ rest) = f rest
-        f Done = []
-        f (Fail e) = error $ "tarballReadFiles on " ++ file ++ ", " ++ show e
 
 
 innerTextHTML :: String -> String

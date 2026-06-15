@@ -4,7 +4,7 @@
 -- | Module for reading Cabal files.
 module Input.Cabal(
     PkgName, Package(..),
-    parseCabalTarball, readGhcPkg,
+    readGhcPkg,
     packagePopularity, readCabal
     ) where
 
@@ -38,7 +38,6 @@ import qualified Distribution.Types.BuildInfo.Lens as Lens
 import Distribution.Types.PackageName (mkPackageName, unPackageName)
 import Distribution.Types.Version (versionNumbers)
 import Distribution.Utils.ShortText (fromShortText)
-import Hackage.RevDeps (lastVersionsOfPackages)
 import qualified Distribution.SPDX as SPDX
 
 ---------------------------------------------------------------------
@@ -118,13 +117,6 @@ readGhcPkg settings = do
     let f ((stripPrefix "name: " -> Just x):xs) = Just (mkPackageName $ trimStart x, fixer $ readCabal settings $ bstrPack $ unlines xs)
         f _ = Nothing
     pure $ Map.fromList $ mapMaybe f $ splitOn ["---"] $ lines $ filter (/= '\r') $ UTF8.toString stdout
-
-
--- | Given a tarball of Cabal files, parse the latest version of each package.
-parseCabalTarball :: Settings -> FilePath -> IO (Map.Map PkgName Package)
-parseCabalTarball settings tarfile = do
-    lastVersions <- lastVersionsOfPackages (const True) tarfile Nothing
-    pure $ Map.map (readCabal settings) lastVersions
 
 
 ---------------------------------------------------------------------

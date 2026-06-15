@@ -29,24 +29,25 @@ data CmdLine
         ,database :: FilePath
         ,count :: Maybe Int
         ,query :: [String]
-        ,repeat_ :: Int        ,compare_ :: [String]
+        ,repeat_ :: Int
+        ,compare_ :: [String]
         }
     | Generate
-        {download :: Maybe Bool
-        ,database :: FilePath
-        ,insecure :: Bool
+        {database :: FilePath
         ,include :: [String]
         ,count :: Maybe Int
         ,local_ :: [FilePath]
         ,haddock :: Maybe FilePath
-        ,debug :: Bool        }
+        ,debug :: Bool
+        }
     | Server
         {port :: Int
         ,database :: FilePath
         ,logs :: FilePath
         ,local :: Bool
         ,haddock :: Maybe FilePath
-        ,links :: Bool        ,scope :: String
+        ,links :: Bool
+        ,scope :: String
         ,home :: String
         ,host :: String
         ,https :: Bool
@@ -58,7 +59,8 @@ data CmdLine
     | Replay
         {logs :: FilePath
         ,database :: FilePath
-        ,repeat_ :: Int        ,scope :: String
+        ,repeat_ :: Int
+        ,scope :: String
         }
     | Test
         { deep :: Bool
@@ -131,9 +133,7 @@ search_ = Search
     } &= help "Perform a search"
 
 generate = Generate
-    {download = def &= help "Download all files from the web"
-    ,insecure = def &= help "Allow insecure HTTPS connections"
-    ,include = def &= args &= typ "PACKAGE"
+    {include = def &= args &= typ "PACKAGE"
     ,local_ = def &= opt "" &= help "Index local packages and link to local haddock docs"
     ,count = Nothing &= name "n" &= help "Maximum number of packages to index (defaults to all)"
     ,haddock = def &= help "Use local haddocks"
