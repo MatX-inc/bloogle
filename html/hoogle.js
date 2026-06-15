@@ -1,13 +1,10 @@
 
-// PERHAPS I SHOULD BE USING Bootstrap with:
-// http://silviomoreto.github.io/bootstrap-select/
+// Vanilla JS, no framework dependencies.
 
-
-var embed = false; // are we running as an embedded search box
 var instant = true; // should we search on key presses
 var query = parseQuery(); // what is the current query string
 
-var $hoogle; // $("#hoogle") after load
+var hoogleEl; // document.getElementById("hoogle") after load
 
 
 /////////////////////////////////////////////////////////////////////
@@ -24,211 +21,103 @@ function on_arrow_press(ev) {
     }
 
     // Figure out where we are
-    var results = $("div#body .result");
-    var activeResults = $("div#body .result.active");
+    var results = document.querySelectorAll("div#body .result");
+    var activeResults = document.querySelectorAll("div#body .result.active");
     var activeRow = -1;
-    if (activeResults.length == 1) {
-        activeRow = results.index(activeResults[0]);
-    }
+    if (activeResults.length == 1)
+        activeRow = Array.prototype.indexOf.call(results, activeResults[0]);
 
     if (ev.keyCode == Key.Return) {
-        if (activeRow >= 0)
-            document.location.href = $("a", activeResults).attr("href");
+        if (activeRow >= 0) {
+            var a = activeResults[0].querySelector("a");
+            if (a) document.location.href = a.getAttribute("href");
+        }
     } else {
         var newRow = activeRow + offset;
-        var $activeRow = $(results[activeRow]);
+        var activeEl = results[activeRow];
         if (newRow < 0) {
-            $activeRow.removeClass("active");
-            $hoogle.focus();
+            if (activeEl) activeEl.classList.remove("active");
+            hoogleEl.focus();
         } else if (newRow < results.length) {
-            var $newRow = $(results[newRow]);
-            if (activeRow >= 0)
-                $activeRow.removeClass("active");
-            $newRow.addClass("active");
-            $hoogle.blur();
+            var newEl = results[newRow];
+            if (activeRow >= 0 && activeEl) activeEl.classList.remove("active");
+            newEl.classList.add("active");
+            hoogleEl.blur();
         }
     }
 }
 
-$(function() {
-    $(document).keyup(on_arrow_press);
+ready(function() {
+    document.addEventListener("keyup", on_arrow_press);
 });
 
-$(function(){
-    $hoogle = $("#hoogle");
-    var $form = $hoogle.parents("form:first");
-    var $scope = $form.find("[name=scope]");
-    embed = !$hoogle.hasClass("HOOGLE_REAL");
-    if (!embed) $scope.chosen({"search_contains":true});
+ready(function(){
+    hoogleEl = document.getElementById("hoogle");
+    var form = hoogleEl.closest("form");
+    var scopeEl = form.querySelector("[name=scope]");
 
-    var self = embed ? newEmbed() : newReal();
+    var self = newReal();
 
-    var ajaxUrl = !embed ? "?" : $form.attr("action") + "?";
-    var ajaxMode = embed ? 'embed' : 'body';
-
-    var active = $hoogle.val() + " " + $scope.val(); // What is currently being searched for (may not yet be displayed)
+    var active = hoogleEl.value + " " + scopeEl.value; // What is currently being searched for (may not yet be displayed)
     var past = cache(100); // Cache of previous searches
     var watch = watchdog(500, function(){self.showWaiting();}); // Timeout of the "Waiting..." callback
 
     function hit(){
         if (!instant) return;
         function getScope(){
-            var v = $scope ? $scope.val() : "";
+            var v = scopeEl ? scopeEl.value : "";
             return v == null || v == "set:stackage" ? "" : v;
         }
 
-        var nowHoogle = $hoogle.val();
+        var nowHoogle = hoogleEl.value;
         var nowScope = getScope();
         var now = nowHoogle + " " + nowScope;
         if (now == active) return;
         active = now;
 
-        var title = now + (now == " " ? "" : " - ") + "Hoogle";
+        var title = now + (now == " " ? "" : " - ") + "Bloogle";
         query["hoogle"] = nowHoogle;
         query["scope"] = nowScope;
-        if (!embed){
-            if (window.history)
-                window.history.replaceState(null, title, renderQuery(query));
-            $("title").text(title);
-        }
+        if (window.history)
+            window.history.replaceState(null, title, renderQuery(query));
+        document.title = title;
 
         var old = past.ask(now);
         if (old != undefined){self.showResult(old); return;}
 
         watch.stop();
-        if (embed && now == ""){self.hide(); return;}
         watch.start();
 
-        var data = {hoogle:nowHoogle, scope:nowScope, mode:ajaxMode};
-        function complete(e)
-        {
-            watch.stop();
-            var current = $hoogle.val() + " " + getScope() == now;
-            if (e.status == 200)
-            {
-                past.add(now,e.responseText);
-                if (current)
-                    self.showResult(e.responseText);
-            }
-            else if (current)
-                self.showError(e.status, e.responseText);
-        }
-
-        var args = {url:ajaxUrl, data:data, complete:complete, dataType:"html"}
-        try {
-            $.ajax(args);
-        } catch (err) {
-            try {
-                if (!embed) throw err;
-                $.ajaxCrossDomain(args);
-            } catch (err) {
-                // Probably a permissions error from cross domain scripting...
+        var url = "?" + new URLSearchParams({hoogle:nowHoogle, scope:nowScope, mode:"body"});
+        fetch(url, {headers: {"Accept": "text/html"}})
+            .then(function(resp){
+                return resp.text().then(function(text){ return {status:resp.status, text:text}; });
+            })
+            .then(function(r){
                 watch.stop();
-            }
-        }
+                var current = hoogleEl.value + " " + getScope() == now;
+                if (r.status == 200){
+                    past.add(now, r.text);
+                    if (current) self.showResult(r.text);
+                } else if (current) {
+                    self.showError(r.status, r.text);
+                }
+            })
+            .catch(function(){ watch.stop(); });
     };
-    $hoogle.keyup(hit);
-    $scope.change(hit);
+    hoogleEl.addEventListener("keyup", hit);
+    scopeEl.addEventListener("change", hit);
 })
 
 function newReal()
 {
-    $hoogle.select();
-    var $body = $("#body");
+    hoogleEl.select();
+    var body = document.getElementById("body");
 
     return {
-        showWaiting: function(){$("h1").text("Still working...");},
-        showError: function(status,text){$body.html("<h1><b>Error:</b> status " + status + "</h1><p>" + text + "</p>")},
-        showResult: function(text){$body.html(text); newDocs();}
-    }
-}
-
-function newEmbed()
-{
-    $hoogle.attr("autocomplete","off");
-    // IE note: unless the div in the iframe contain any border it doesn't calculate the correct outerHeight()
-    //          therefore we put 3 borders on the iframe, and leave one for the bottom div
-    var $iframe = $("<iframe id='hoogle-output' scrolling='no' "+
-                    "style='position:absolute;border:1px solid rgb(127,157,185);border-bottom:0px;display:none;' />");
-    var $body;
-    $iframe.load(function(){
-        var $contents = $iframe.contents();
-        $contents.find("head").html(
-            "<style type='text/css'>" +
-            "html {border: 0px;}" +
-            "body {font-family: sans-serif; font-size: 13px; background-color: white; padding: 0px; margin: 0px;}" +
-            "a, i {display: block; color: black; padding: 1px 3px; text-decoration: none; white-space: nowrap; overflow: hidden; cursor: default;}" +
-            "a.sel {background-color: rgb(10,36,106); color: white;}" +
-            "div {border-bottom:1px solid rgb(127,157,185);}" +
-            "</style>");
-        $body = $("<div>").appendTo($contents.find("body"));
-    });
-    $iframe.insertBefore($hoogle);
-
-    var finishOnBlur = true; // Should a blur hide the box
-
-    function show(x){
-        if (x == undefined)
-            $iframe.css("display","none");
-        else {
-            $body.html(x).find("a").attr("target","_parent")
-                .mousedown(function(){finishOnBlur = false;})
-                .mouseup(function(){finishOnBlur = true;})
-                .mouseenter(function(){
-                    $body.find(".sel").removeClass("sel");
-                    $(this).addClass("sel");
-                });
-
-            var pos = $hoogle.position();
-            // need to display before using $body.outerHeight() on Firefox
-            $iframe.css("display","").css(
-                {top:px(pos.top + $hoogle.outerHeight() + unpx($hoogle.css("margin-top")))
-                ,left:px(pos.left + unpx($hoogle.css("margin-left")))
-                ,width:px($hoogle.outerWidth() - 2 /* iframe border */)
-                ,height:$body.outerHeight()
-                });
-        }
-    }
-
-    $hoogle.blur(function(){if (finishOnBlur) show();});
-
-    $hoogle.keydown(function(event){
-        switch(event.which)
-        {
-        case Key.Return:
-            var sel = $body.find(".sel:first");
-            if (sel.size() == 0) return;
-            event.preventDefault();
-            document.location.href = sel.attr("href");
-            break;
-
-        case Key.Escape:
-            $body.find(".sel").removeClass("sel");
-            show();
-            break;
-
-        case Key.Down: case Key.Up:
-            var i = event.which == Key.Down ? 1 : -1;
-            var all = $body.find("a");
-            var sel = all.filter(".sel");
-            var now = all.index(sel);
-            if (now == -1)
-                all.filter(i == 1 ? ":first" : ":last").addClass("sel");
-            else {
-                sel.removeClass("sel");
-                // IE treats :eq(-1) as :eq(0), so filter specifically
-                if (now+i >= 0) all.filter(":eq(" + (now+i) + ")").addClass("sel");
-            }
-            event.preventDefault();
-            break;
-        }
-    });
-
-    return {
-        showWaiting: function(){show("<i>Still working...</i>");},
-        showError: function(status,text){show("<i>Error: status " + status + "</i>");},
-        showResult: function(text){show(text);},
-        hide: function(){show();}
+        showWaiting: function(){document.querySelector("h1").textContent = "Still working...";},
+        showError: function(status,text){body.innerHTML = "<h1><b>Error:</b> status " + status + "</h1><p>" + text + "</p>";},
+        showResult: function(text){body.innerHTML = text; newDocs();}
     }
 }
 
@@ -238,24 +127,28 @@ function newEmbed()
 
 var prefixUrl = document.location.protocol + "//" + document.location.hostname + document.location.pathname;
 
-$(function(){
-    if (embed) return;
+ready(function(){
     if (prefixUrl != "http://hoogle.haskell.org/")
     {
-        $("link[rel=search]").attr("href", function(){
-            return this.href + "?domain=" + escape(prefixUrl);
-        });
+        var link = document.querySelector("link[rel=search]");
+        if (link) link.href = link.href + "?domain=" + escape(prefixUrl);
     }
     if (window.external && ("AddSearchProvider" in window.external))
     {
-        $("#plugin").css("display","inline").on('click', function(){
-            var url = $("link[rel=search]").attr("href");
-            //  If neither scheme(http(s)://) nor DSN prefix(//) is in URL then we
-            //  should add prefix.
-            if (url.indexOf('://') === -1 && url.indexOf('//') !== 0)
-                url = prefixUrl + url;
-            window.external.AddSearchProvider(url);
-        });
+        var plugin = document.getElementById("plugin");
+        if (plugin)
+        {
+            plugin.style.display = "inline";
+            plugin.addEventListener("click", function(){
+                var link = document.querySelector("link[rel=search]");
+                var url = link.getAttribute("href");
+                //  If neither scheme(http(s)://) nor DSN prefix(//) is in URL then we
+                //  should add prefix.
+                if (url.indexOf('://') === -1 && url.indexOf('//') !== 0)
+                    url = prefixUrl + url;
+                window.external.AddSearchProvider(url);
+            });
+        }
     }
 });
 
@@ -263,33 +156,35 @@ $(function(){
 /////////////////////////////////////////////////////////////////////
 // DOCUMENTATION
 
-$(function(){
-    if (embed) return;
-    $(window).resize(resizeDocs);
+ready(function(){
+    window.addEventListener("resize", resizeDocs);
     newDocs();
 });
 
 function resizeDocs()
 {
-    $("#body .doc").each(function(){
-        // If a segment is open, it should remain open forever
-        var $this = $(this);
-        var toosmall = ($.support.preWrap && $this.hasClass("newline")) ||
-                       ($this.height() < $this.children().height());
-        if (toosmall && !$this.hasClass("open"))
-            $this.addClass("shut");
-        else if (!toosmall && $this.hasClass("shut"))
-            $this.removeClass("shut");
+    document.querySelectorAll("#body .doc").forEach(function(el){
+        // If a segment is open, it should remain open forever.
+        // .doc/.shut clip to max-height with overflow:hidden, so an overflowing
+        // element (content taller than the clipped box) needs the expand icon.
+        var overflowing = el.classList.contains("newline") || el.scrollHeight > el.clientHeight;
+        if (overflowing && !el.classList.contains("open"))
+            el.classList.add("shut");
+        else if (!overflowing && el.classList.contains("shut"))
+            el.classList.remove("shut");
     });
 }
 
 function newDocs()
 {
     resizeDocs();
-    $("#body .doc").click(function(){
-        var $this = $(this);
-        if ($this.hasClass("open") || $this.hasClass("shut"))
-            $this.toggleClass("open").toggleClass("shut");
+    document.querySelectorAll("#body .doc").forEach(function(el){
+        el.addEventListener("click", function(){
+            if (el.classList.contains("open") || el.classList.contains("shut")){
+                el.classList.toggle("open");
+                el.classList.toggle("shut");
+            }
+        });
     });
 }
 
@@ -297,24 +192,33 @@ function newDocs()
 /////////////////////////////////////////////////////////////////////
 // iOS TWEAKS
 
-$(function(){
-    if ($.support.inputSearch)
-        $("#hoogle")[0].type = "search";
+ready(function(){
+    if (inputSearch)
+        hoogleEl.type = "search";
 
     var qphone = query["phone"];
-    phone =
+    var phone =
         qphone == "0" ? false :
         qphone == "1" ? true :
-        $.support.phone;
+        phoneSupport;
 
     if (!phone) return;
-    $("body").addClass("phone");
-    $("head").append("<meta name='viewport' content='width=device-width' />");
+    document.body.classList.add("phone");
+    var meta = document.createElement("meta");
+    meta.name = "viewport";
+    meta.content = "width=device-width";
+    document.head.appendChild(meta);
 });
 
 
 /////////////////////////////////////////////////////////////////////
 // LIBRARY BITS
+
+function ready(fn) // run fn once the DOM is parsed
+{
+    if (document.readyState != "loading") fn();
+    else document.addEventListener("DOMContentLoaded", fn);
+}
 
 function parseQuery() // :: IO (Dict String String)
 {
@@ -344,21 +248,18 @@ function renderQuery(query) // Dict String String -> IO String
 }
 
 
-// Supports white-space: pre-wrap;
-$.support.preWrap = true;
-
-$.support.iOS =
+var iOS =
     (navigator.userAgent.indexOf("iPhone") != -1) ||
     (navigator.userAgent.indexOf("iPod") != -1) ||
     (navigator.userAgent.indexOf("iPad") != -1);
 
-$.support.phone =
+var phoneSupport =
     (navigator.userAgent.indexOf("iPhone") != -1) ||
     (navigator.userAgent.indexOf("iPod") != -1) ||
     (navigator.userAgent.indexOf("Android") != -1);
 
 // Supports <input type=search />
-$.support.inputSearch = $.support.iOS;
+var inputSearch = iOS;
 
 var Key = {
     Up: 38,
@@ -366,9 +267,6 @@ var Key = {
     Return: 13,
     Escape: 27
 };
-
-function unpx(x){var r = 1 * x.replace("px",""); return isNaN(r) ? 0 : r;}
-function px(x){return x + "px";}
 
 function cache(maxElems)
 {
@@ -396,22 +294,4 @@ function watchdog(time, fun)
     function stop(){if (id == undefined) return; window.clearTimeout(id); id = undefined;}
     function start(){stop(); id = window.setTimeout(function(){id = undefined; fun();}, time);}
     return {start:start, stop:stop}
-}
-
-$.ajaxCrossDomain = function(args)
-{
-    if (!window.XDomainRequest) throw new Error("the XDomainRequest object is not supported in this browser");
-
-    var xdr = new XDomainRequest();
-    xdr.onload = function(){args.complete({status:200, responseText:xdr.responseText});};
-    xdr.onerror = function(){args.complete({status:0, responseText:""});};
-
-    var url = "";
-    for (var i in args.data)
-    {
-        if (args.data[i] == undefined) continue;
-        url += (url == "" ? "" : "&") + encodeURIComponent(i) + "=" + encodeURIComponent(args.data[i]);
-    }
-    xdr.open("get", args.url + url);
-    xdr.send();
 }

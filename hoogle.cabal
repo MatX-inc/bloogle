@@ -32,9 +32,6 @@ data-files:
     html/*.css
     html/*.xml
     html/*.html
-    html/plugin/*.css
-    html/plugin/*.js
-    html/plugin/*.png
 
 source-repository head
     type:     git
@@ -71,7 +68,6 @@ library
         haskell-src-exts >= 1.22 && < 1.24,
         http-conduit >= 2.3,
         http-types,
-        js-jquery,
         mmap,
         process-extras,
         prometheus-client,

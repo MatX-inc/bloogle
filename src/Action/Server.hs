@@ -14,7 +14,6 @@ import Text.Blaze.Renderer.Utf8
 import qualified Text.Blaze.XHtml5 as H
 import qualified Text.Blaze.XHtml5.Attributes as H
 import Data.Tuple.Extra
-import qualified Language.Javascript.JQuery as JQuery
 import Data.Version
 import Paths_hoogle
 import Data.Maybe
@@ -121,7 +120,6 @@ replyServer log local links haddock store home htmlDir scope Input{..} = case in
                 Nothing -> pure $ OutputJSON $ JSON.toEncoding filteredResults
             Just m -> pure $ OutputFail $ lbstrPack $ "Mode " ++ m ++ " not (currently) supported"
     ["search.xml"] -> OutputXML <$> templateRender templateSearch []
-    ["plugin","jquery.js"] -> OutputFile <$> JQuery.file
 
     ["canary"] -> do
         now <- getCurrentTime
@@ -159,7 +157,6 @@ replyServer log local links haddock store home htmlDir scope Input{..} = case in
         tagOptions sel = mconcat [H.option Text.Blaze.!? (x `elem` sel, H.selected "selected") $ H.string x | x <- completionTags store]
         params =
             [("home", text home)
-            ,("jquery", text "plugin/jquery.js")
             ,("version", text $ showVersion version ++ " " ++ showUTCTime "%Y-%m-%d %H:%M" spawned)]
         templateIndex = templateFile (htmlDir </> "index.html") `templateApply` params
         templateEmpty = templateFile (htmlDir </>  "welcome.html")
