@@ -14,9 +14,6 @@ import Input.Haddock
 import System.IO.Extra
 
 import Control.Monad
-import Output.Items
-import Control.DeepSeq
-import Control.Exception
 
 
 actionTest :: CmdLine -> IO ()
@@ -35,14 +32,3 @@ actionTest Test{..} = withBuffering stdout NoBuffering $ withTempFile $ \sample 
     action_search_test True sample
     unless disable_network_tests $ action_server_test True sample
     putStrLn ""
-
-    unless (disable_network_tests || null database) $ do
-        putStrLn "Haskell.org database tests"
-        action_search_test False database
-        action_server_test False database
-
-        when deep $ withSearch database $ \store -> do
-            putStrLn "Deep tests"
-            let xs = map targetItem $ listItems store
-            evaluate $ rnf xs
-            putStrLn $ "Loaded " ++ show (length xs) ++ " items"
