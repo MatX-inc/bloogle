@@ -63,6 +63,7 @@ readInput (breakOn "?" -> (a,b)) =
 data Output
     = OutputText LBS.ByteString
     | OutputHTML LBS.ByteString
+    | OutputXML LBS.ByteString
     | OutputJavascript LBS.ByteString
     | OutputJSON Encoding
     | OutputFail LBS.ByteString
@@ -74,6 +75,7 @@ forceBS :: Output -> LBS.ByteString
 forceBS (OutputText x) = force x
 forceBS (OutputJSON x) = force $ encodingToLazyByteString x
 forceBS (OutputHTML x) = force x
+forceBS (OutputXML x) = force x
 forceBS (OutputJavascript x) = force x
 forceBS (OutputFail x) = force x
 forceBS (OutputFile x) = rnf x `seq` LBS.empty
@@ -107,16 +109,9 @@ server log Server{..} act = do
               -- (e.g. fonts), the only valid origin is the same as the current
               -- page.
               "default-src 'self';"
-              -- As an exception to the default rule, allow scripts from jquery
-              -- and the CDN.
-              <> " script-src 'self' https://code.jquery.com/ https://rawcdn.githack.com;"
-              -- As an exception to the default rule, allow stylesheets from
-              -- the CDN. TODO: for now, we are also enabling inline styles,
-              -- because it the chosen plugin uses them.
-              <> " style-src 'self' 'unsafe-inline' https://rawcdn.githack.com;"
-              -- As an exception to the default rule, allow images from the
-              -- CDN.
-              <> " img-src 'self' https://rawcdn.githack.com;"
+              -- TODO: for now, we are also enabling inline styles, because the
+              -- chosen plugin uses them.
+              <> " style-src 'self' 'unsafe-inline';"
               -- Only allow this request in an iframe if the containing page
               -- has the same origin.
               <> " frame-ancestors 'self';"
@@ -183,6 +178,7 @@ server log Server{..} act = do
                 OutputJSON{} -> responseLBS status200 (("content-type","application/json") : ("access-control-allow-origin","*") : secH) bs
                 OutputFail{} -> responseLBS status400 (("content-type","text/plain") : secH) bs
                 OutputHTML{} -> responseLBS status200 (("content-type","text/html") : secH) bs
+                OutputXML{} -> responseLBS status200 (("content-type","application/opensearchdescription+xml") : secH) bs
                 OutputJavascript{} -> responseLBS status200 (("content-type","text/javascript") : secH) bs
 
 contentType = [(".html","text/html"),(".css","text/css"),(".js","text/javascript")]

@@ -64,7 +64,7 @@ actionServer cmd@Server{..} = do
     dataDir <- maybe getDataDir pure datadir
     haddock <- maybe (pure Nothing) (fmap Just . canonicalizePath) haddock
     withSearch database $ \store ->
-        server log cmd $ replyServer log local links haddock store cdn home (dataDir </> "html") scope
+        server log cmd $ replyServer log local links haddock store home (dataDir </> "html") scope
 
 actionReplay :: CmdLine -> IO ()
 actionReplay Replay{..} = withBuffering stdout NoBuffering $ do
@@ -73,7 +73,7 @@ actionReplay Replay{..} = withBuffering stdout NoBuffering $ do
     (t,_) <- duration $ withSearch database $ \store -> do
         log <- logNone
         dataDir <- getDataDir
-        let op = replyServer log False False Nothing store "" "" (dataDir </> "html") scope
+        let op = replyServer log False False Nothing store "" (dataDir </> "html") scope
         replicateM_ repeat_ $ forM_ qs $ \x -> do
             res <- op x
             evaluate $ rnf res
@@ -84,8 +84,8 @@ actionReplay Replay{..} = withBuffering stdout NoBuffering $ do
 spawned :: UTCTime
 spawned = unsafePerformIO getCurrentTime
 
-replyServer :: Log -> Bool -> Bool -> Maybe FilePath -> StoreRead -> String -> String -> FilePath -> String -> Input -> IO Output
-replyServer log local links haddock store cdn home htmlDir scope Input{..} = case inputURL of
+replyServer :: Log -> Bool -> Bool -> Maybe FilePath -> StoreRead -> String -> FilePath -> String -> Input -> IO Output
+replyServer log local links haddock store home htmlDir scope Input{..} = case inputURL of
     -- without -fno-state-hack things can get folded under this lambda
     [] -> do
         let grabBy name = [x | (a,x) <- inputArgs, name a, x /= ""]
@@ -121,6 +121,7 @@ replyServer log local links haddock store cdn home htmlDir scope Input{..} = cas
                 Just f -> pure $ OutputFail $ lbstrPack $ "Format mode " ++ f ++ " not (currently) supported"
                 Nothing -> pure $ OutputJSON $ JSON.toEncoding filteredResults
             Just m -> pure $ OutputFail $ lbstrPack $ "Mode " ++ m ++ " not (currently) supported"
+    ["search.xml"] -> OutputXML <$> templateRender templateSearch []
     ["plugin","jquery.js"] -> OutputFile <$> JQuery.file
     ["plugin","jquery.flot.js"] -> OutputFile <$> Flot.file Flot.Flot
     ["plugin","jquery.flot.time.js"] -> OutputFile <$> Flot.file Flot.FlotTime
@@ -165,13 +166,13 @@ replyServer log local links haddock store cdn home htmlDir scope Input{..} = cas
 
         tagOptions sel = mconcat [H.option Text.Blaze.!? (x `elem` sel, H.selected "selected") $ H.string x | x <- completionTags store]
         params =
-            [("cdn", text cdn)
-            ,("home", text home)
-            ,("jquery", text $ if null cdn then "plugin/jquery.js" else "https:" ++ JQuery.url)
+            [("home", text home)
+            ,("jquery", text "plugin/jquery.js")
             ,("version", text $ showVersion version ++ " " ++ showUTCTime "%Y-%m-%d %H:%M" spawned)]
         templateIndex = templateFile (htmlDir </> "index.html") `templateApply` params
         templateEmpty = templateFile (htmlDir </>  "welcome.html")
         templateHome = templateIndex `templateApply` [("tags",html $ tagOptions []),("body",templateEmpty),("title",text "Bloogle"),("search",text ""),("robots",text "index")]
+        templateSearch = templateFile (htmlDir </> "search.xml") `templateApply` params
         templateLog = templateFile (htmlDir </> "log.html") `templateApply` params
         templateLogJs = templateFile (htmlDir </> "log.js") `templateApply` params
 
@@ -282,7 +283,7 @@ action_server_test sample database = do
         log <- logNone
         dataDir <- getDataDir
         let check p q = do
-                OutputHTML (lbstrUnpack -> res) <- replyServer log False False Nothing store "" "" (dataDir </> "html") "" (Input [] [("hoogle",q)])
+                OutputHTML (lbstrUnpack -> res) <- replyServer log False False Nothing store "" (dataDir </> "html") "" (Input [] [("hoogle",q)])
                 if p res then putChar '.' else fail $ "Bad substring: " ++ res
         let q === want = check (want `isInfixOf`) q
         let q /== want = check (not . isInfixOf want) q
