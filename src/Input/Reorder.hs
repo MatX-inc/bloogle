@@ -3,12 +3,11 @@
 module Input.Reorder(reorderItems) where
 
 import Input.Item
-import Input.Settings
 import Data.List.Extra
 import Data.Tuple.Extra
 import General.Util
 import General.Str
-import Distribution.Types.PackageName (mkPackageName, unPackageName)
+import Distribution.Types.PackageName (mkPackageName)
 
 
 pkgGhc :: PkgName
@@ -23,10 +22,11 @@ packageOrderHacks f x = f x
 
 -- | Reorder items so the most popular ones are first, using reverse dependencies.
 --   Low numbers for the PkgName function mean the package is more popular.
-reorderItems :: Settings -> (PkgName -> Int) -> [(a, Item)] -> [(a, Item)]
-reorderItems Settings{..} packageOrder xs =
+reorderItems :: (PkgName -> Int) -> [(a, Item)] -> [(a, Item)]
+reorderItems packageOrder xs =
     concatMap snd $ sortOn ((packageOrderHacks packageOrder &&& id) . fst) $ map rebase $ splitIPackage xs
     where
         refunc = map $ second $ \(x:xs) -> x : sortOn (itemName . snd) xs
-        rebase (x, xs) = (x, concatMap snd $ sortOn (((negate . f . strUnpack) &&& id) . fst) $ refunc $ splitIModule xs)
-            where f = reorderModule (unPackageName x)
+        -- module ordering used to be configurable via settings; with that gone
+        -- modules just sort by name
+        rebase (x, xs) = (x, concatMap snd $ sortOn fst $ refunc $ splitIModule xs)

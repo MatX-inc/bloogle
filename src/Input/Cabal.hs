@@ -8,8 +8,6 @@ module Input.Cabal(
     packagePopularity, readCabal
     ) where
 
-import Input.Settings
-
 import Data.List.Extra
 import System.FilePath
 import Control.DeepSeq
@@ -86,8 +84,8 @@ packagePopularity cbl = mp `seq` (errs, mp)
 -- READERS
 
 -- | Run 'ghc-pkg' and get a list of packages which are installed.
-readGhcPkg :: Settings -> IO (Map.Map PkgName Package)
-readGhcPkg settings = do
+readGhcPkg :: IO (Map.Map PkgName Package)
+readGhcPkg = do
     topdir <- findExecutable "ghc-pkg"
     (exit, stdout, stderr) <-
     -- From GHC 9.0.1, the `haddock-html` field in `*.conf` files for GHC boot
@@ -114,7 +112,7 @@ readGhcPkg settings = do
         -- ^ Backwards compatibility with GHC < 9.0
         g x = x
     let fixer p = p{packageLibrary = True, packageDocs = g <$> packageDocs p}
-    let f ((stripPrefix "name: " -> Just x):xs) = Just (mkPackageName $ trimStart x, fixer $ readCabal settings $ bstrPack $ unlines xs)
+    let f ((stripPrefix "name: " -> Just x):xs) = Just (mkPackageName $ trimStart x, fixer $ readCabal $ bstrPack $ unlines xs)
         f _ = Nothing
     pure $ Map.fromList $ mapMaybe f $ splitOn ["---"] $ lines $ filter (/= '\r') $ UTF8.toString stdout
 
@@ -122,8 +120,8 @@ readGhcPkg settings = do
 ---------------------------------------------------------------------
 -- PARSERS
 
-readCabal :: Settings -> BStr -> Package
-readCabal settings src = case PD.parseGenericPackageDescriptionMaybe src of
+readCabal :: BStr -> Package
+readCabal src = case PD.parseGenericPackageDescriptionMaybe src of
     Nothing -> Package
         { packageTags = []
         , packageLibrary = False
@@ -132,10 +130,10 @@ readCabal settings src = case PD.parseGenericPackageDescriptionMaybe src of
         , packageDepends = []
         , packageDocs = Nothing
         }
-    Just gpd -> readCabal' settings gpd
+    Just gpd -> readCabal' gpd
 
-readCabal' :: Settings -> PD.GenericPackageDescription -> Package
-readCabal' Settings{..} gpd = Package{..}
+readCabal' :: PD.GenericPackageDescription -> Package
+readCabal' gpd = Package{..}
     where
         pd = PD.flattenPackageDescription gpd
         pkgId = PD.package pd
@@ -168,5 +166,5 @@ readCabal' Settings{..} gpd = Package{..}
         -- split on things like "," "&" "and", then throw away email addresses, replace spaces with "-" and rename
         cleanup =
             filter (/= "") .
-            map (renameTag . intercalate "-" . filter ('@' `notElem`) . words . takeWhile (`notElem` "<(")) .
+            map (intercalate "-" . filter ('@' `notElem`) . words . takeWhile (`notElem` "<(")) .
             concatMap (map unwords . split (== "and") . words) . split (`elem` ",&")

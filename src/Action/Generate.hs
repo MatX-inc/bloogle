@@ -25,7 +25,6 @@ import Output.Types
 import Input.Cabal
 import Input.Haddock
 import Input.Reorder
-import Input.Settings
 import Input.Item
 import General.Util
 import General.Store
@@ -89,8 +88,8 @@ generate output metadata = ...
 -- @tagsoup filter -- search the tagsoup package
 -- filter -- search all
 
-readHaskellDirs :: Timing -> Settings -> [FilePath] -> IO (Map.Map PkgName Package, Set.Set PkgName, ConduitT () (PkgName, URL, LBStr) IO ())
-readHaskellDirs timing settings dirs = do
+readHaskellDirs :: Timing -> [FilePath] -> IO (Map.Map PkgName Package, Set.Set PkgName, ConduitT () (PkgName, URL, LBStr) IO ())
+readHaskellDirs timing dirs = do
     files <- concatMapM listFilesRecursive dirs
     -- We reverse/sort the list because of #206
     -- Two identical package names with different versions might be foo-2.0 and foo-1.0
@@ -112,7 +111,7 @@ readHaskellDirs timing settings dirs = do
   where
     parseCabal fp = do
         src <- bstrReadFile fp
-        let pkg = readCabal settings src
+        let pkg = readCabal src
         pure (mkPackageName $ takeBaseName fp, pkg)
 
     generateBarePackage (name, file) =
@@ -121,9 +120,9 @@ readHaskellDirs timing settings dirs = do
         sets = map setFromDir $ filter (`isPrefixOf` file) dirs
         setFromDir dir = (strPack "set", strPack $ takeFileName $ dropTrailingPathSeparator dir)
 
-readHaskellGhcpkg :: Timing -> Settings -> IO (Map.Map PkgName Package, Set.Set PkgName, ConduitT () (PkgName, URL, LBStr) IO ())
-readHaskellGhcpkg timing settings = do
-    cbl <- timed timing "Reading ghc-pkg" $ readGhcPkg settings
+readHaskellGhcpkg :: Timing -> IO (Map.Map PkgName Package, Set.Set PkgName, ConduitT () (PkgName, URL, LBStr) IO ())
+readHaskellGhcpkg timing = do
+    cbl <- timed timing "Reading ghc-pkg" readGhcPkg
     let source =
             forM_ (Map.toList cbl) $ \(name,Package{..}) -> whenJust packageDocs $ \docs -> do
                 let file = docs </> unPackageName name <.> "txt"
@@ -158,9 +157,9 @@ readHaskellGhcpkg timing settings = do
 -- 3. Deploy the Hoogle database and Haddock files to your documentation server & run hoogle server --haddock=new/path/to/doc
 --
 -- from https://github.com/ndmitchell/hoogle/pull/202
-readHaskellHaddock :: Timing -> Settings -> FilePath -> IO (Map.Map PkgName Package, Set.Set PkgName, ConduitT () (PkgName, URL, LBStr) IO ())
-readHaskellHaddock timing settings docBaseDir = do
-    cbl <- timed timing "Reading ghc-pkg" $ readGhcPkg settings
+readHaskellHaddock :: Timing -> FilePath -> IO (Map.Map PkgName Package, Set.Set PkgName, ConduitT () (PkgName, URL, LBStr) IO ())
+readHaskellHaddock timing docBaseDir = do
+    cbl <- timed timing "Reading ghc-pkg" readGhcPkg
     let source =
             forM_ (Map.toList cbl) $ \(name, p@Package{..}) -> do
                 let docs = docDir (unPackageName name) p
@@ -185,15 +184,14 @@ actionGenerate g@Generate{..} = withTiming (if debug then Just $ replaceExtensio
     let warnFlagIgnored thisFlag reason ignoredFlagPred ignoredFlag =
           when ignoredFlagPred $ putStrLn $ "Warning: " <> thisFlag <> " is " <> reason <> ", which means " <> ignoredFlag <> " is ignored."
 
-    settings <- loadSettings
     (cbl, want, source) <- case haddock of
         Just dir -> do
             warnFlagIgnored "--haddock" "set" (local_ /= []) "--local"
-            readHaskellHaddock timing settings dir
+            readHaskellHaddock timing dir
         Nothing
-            | [""] <- local_ -> readHaskellGhcpkg timing settings
+            | [""] <- local_ -> readHaskellGhcpkg timing
             | [] <- local_ -> errorIO "Nothing to index: pass --local DIR (a directory of Hoogle .txt files) or --haddock DIR. (Generating from Hackage/Stackage online is no longer supported.)"
-            | otherwise -> readHaskellDirs timing settings local_
+            | otherwise -> readHaskellDirs timing local_
     (cblErrs, popularity) <- evaluate $ packagePopularity cbl
     cbl <- evaluate $ Map.map (\p -> p{packageDepends=[]}) cbl -- clear the memory, since the information is no longer used
     evaluate popularity
@@ -249,7 +247,7 @@ actionGenerate g@Generate{..} = withTiming (if debug then Just $ replaceExtensio
                 pure [(a,b) | (a,bs) <- xs, b <- bs]
 
         itemsMemory <- getStatsCurrentLiveBytes
-        xs <- timed timing "Reordering items" $ pure $! reorderItems settings (\s -> maybe 1 negate $ Map.lookup s popularity) xs
+        xs <- timed timing "Reordering items" $ pure $! reorderItems (\s -> maybe 1 negate $ Map.lookup s popularity) xs
         timed timing "Writing tags" $ writeTags store (`Set.member` want) (\x -> maybe [] (map (both strUnpack) . packageTags) $ Map.lookup x cbl) xs
         timed timing "Writing names" $ writeNames store xs
         timed timing "Writing types" $ writeTypes store (if debug then Just $ dropExtension database else Nothing) xs
