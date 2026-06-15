@@ -15,7 +15,6 @@ import qualified Text.Blaze.XHtml5 as H
 import qualified Text.Blaze.XHtml5.Attributes as H
 import Data.Tuple.Extra
 import qualified Language.Javascript.JQuery as JQuery
-import qualified Language.Javascript.Flot as Flot
 import Data.Version
 import Paths_hoogle
 import Data.Maybe
@@ -123,8 +122,6 @@ replyServer log local links haddock store home htmlDir scope Input{..} = case in
             Just m -> pure $ OutputFail $ lbstrPack $ "Mode " ++ m ++ " not (currently) supported"
     ["search.xml"] -> OutputXML <$> templateRender templateSearch []
     ["plugin","jquery.js"] -> OutputFile <$> JQuery.file
-    ["plugin","jquery.flot.js"] -> OutputFile <$> Flot.file Flot.Flot
-    ["plugin","jquery.flot.time.js"] -> OutputFile <$> Flot.file Flot.FlotTime
 
     ["canary"] -> do
         now <- getCurrentTime
@@ -135,11 +132,6 @@ replyServer log local links haddock store home htmlDir scope Input{..} = case in
             "Errors " ++ (if errs == 0 then "good" else "bad") ++ ": " ++ show errs ++ " in the last 24 hours.\n" ++
             "Updates " ++ (if alive < 1.5 then "good" else "bad") ++ ": Last updated " ++ showDP 2 alive ++ " days ago.\n"
 
-    ["log"] -> do
-        OutputHTML <$> templateRender templateLog []
-    ["log.js"] -> do
-        log <- displayLog <$> logSummary log
-        OutputJavascript <$> templateRender templateLogJs [("data",html $ H.preEscapedString log)]
     ["stats"] -> do
         stats <- getStatsDebug
         pure $ case stats of
@@ -173,8 +165,6 @@ replyServer log local links haddock store home htmlDir scope Input{..} = case in
         templateEmpty = templateFile (htmlDir </>  "welcome.html")
         templateHome = templateIndex `templateApply` [("tags",html $ tagOptions []),("body",templateEmpty),("title",text "Bloogle"),("search",text ""),("robots",text "index")]
         templateSearch = templateFile (htmlDir </> "search.xml") `templateApply` params
-        templateLog = templateFile (htmlDir </> "log.html") `templateApply` params
-        templateLogJs = templateFile (htmlDir </> "log.js") `templateApply` params
 
 
 dedupeTake :: Ord k => Int -> (v -> k) -> [v] -> [[v]]
@@ -295,16 +285,3 @@ action_server_test sample database = do
             "<>" === "<span class=name>(<b>&lt;&gt;</b>)</span>"
             "filt" === "<span class=name><b>filt</b>er</span>"
             "True" === "https://hackage.haskell.org/package/base/docs/Prelude.html#v:True"
-
-
--------------------------------------------------------------
--- ANALYSE THE LOG
-
-
-displayLog :: [Summary] -> String
-displayLog xs = "[" ++ intercalate "," (map f xs) ++ "]"
-    where
-        f Summary{..} = "{date:" ++ show (showGregorian summaryDate) ++
-                        ",users:" ++ show summaryUsers ++ ",uses:" ++ show summaryUses ++
-                        ",slowest:" ++ show summarySlowest ++ ",average:" ++ show (fromAverage summaryAverage) ++
-                        ",errors:" ++ show summaryErrors ++ "}"

@@ -11,6 +11,8 @@ import Network.Wai.Handler.WarpTLS
 import Action.CmdLine
 import Network.Wai.Logger
 import Network.Wai
+import Network.Wai.Middleware.Prometheus (prometheus)
+import Data.Default.Class (def)
 import Control.DeepSeq
 import Network.HTTP.Types (parseQuery, decodePathSegments)
 import Network.HTTP.Types.Status
@@ -160,7 +162,10 @@ server log Server{..} act = do
 
     logAddMessage log $ "Server starting on port " ++ show port ++ " and host/IP " ++ show host'
 
-    runServer $ \req reply -> do
+    -- Serve Prometheus metrics at /metrics, and instrument every other request
+    -- (latency histogram, status codes) for scraping by Prometheus / GCP Managed
+    -- Service for Prometheus.
+    runServer $ prometheus def $ \req reply -> do
         let pq = BS.unpack $ rawPathInfo req <> rawQueryString req
         putStrLn pq
         (time, res) <- duration $ case readInput pq of
