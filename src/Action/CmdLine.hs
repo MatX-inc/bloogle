@@ -3,20 +3,19 @@
 
 module Action.CmdLine(
     CmdLine(..),
-    getCmdLine, defaultDatabase,
+    getCmdLine,
     defaultGenerate,
     whenLoud, whenNormal
     ) where
 
+import Control.Exception.Extra (errorIO)
 import Data.List.Extra
 import Data.Version
 import General.Util
 import Paths_hoogle (version)
 import System.Console.CmdArgs
-import System.Directory
 import System.Environment
 import System.FilePath
-import System.IO
 
 data CmdLine
     = Search
@@ -69,36 +68,17 @@ data CmdLine
         }
       deriving (Data,Typeable,Show)
 
-defaultDatabase :: IO FilePath
-defaultDatabase = do
-    xdgLocation <- getXdgDirectory XdgData "hoogle"
-    legacyLocation <- getAppUserDataDirectory "hoogle"
-    doesXdgPathExist <- doesPathExist xdgLocation
-    doesLegacyPathExist <- doesPathExist legacyLocation
-
-    dir <- case (doesXdgPathExist, doesLegacyPathExist) of
-      -- On Windows XDG location and legacy location are identical
-      _ | xdgLocation == legacyLocation -> pure xdgLocation
-      (_, False) -> pure xdgLocation
-      (True, True) -> do
-        hPutStrLn stderr $
-          "Warning: Legacy location ignored (" ++ legacyLocation ++ "),"
-          ++ "since xdg location is available (" ++ xdgLocation ++")."
-        pure xdgLocation
-      (False, True) -> do
-        -- TODO: renable after release
-        --hPutStrLn stderr $ "Warning: " ++ legacyLocation ++ " is deprecated."
-        --  ++ "Consider moving it to $XDG_DATA_HOME/hoogle (" ++ xdgLocation ++ ")"
-        pure legacyLocation
-    pure $ dir </> "default-" ++ showVersion (trimVersion 3 version) ++ ".hoo"
-
 getCmdLine :: [String] -> IO CmdLine
 getCmdLine args = do
     args <- withArgs args $ cmdArgsRun cmdLineMode
 
-    -- fill in the default database
-    args <- if database args /= "" then pure args else do
-        db <- defaultDatabase; pure args{database=db}
+    -- a database must be specified explicitly; there is no default location
+    -- (`test` is exempt: it builds its own throwaway sample database)
+    args <- case args of
+        Test{} -> pure args
+        _ | null (database args) ->
+              errorIO "No database specified: pass --database FILE (build one with 'hoogle generate --local=DIR --database=FILE')"
+          | otherwise -> pure args
 
     -- fix up people using Hoogle 4 instructions
     args <- case args of

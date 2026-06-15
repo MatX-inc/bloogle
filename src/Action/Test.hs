@@ -36,7 +36,7 @@ actionTest Test{..} = withBuffering stdout NoBuffering $ withTempFile $ \sample 
     unless disable_network_tests $ action_server_test True sample
     putStrLn ""
 
-    unless disable_network_tests $ do
+    unless (disable_network_tests || null database) $ do
         putStrLn "Haskell.org database tests"
         action_search_test False database
         action_server_test False database
