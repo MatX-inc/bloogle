@@ -165,10 +165,6 @@ form {
     color: #0E774A;
 }
 
-#left .pad {
-    padding-left: 16px;
-}
-
 #left .minus {
     color: #770E00;
     padding-left: 16px;
@@ -216,12 +212,6 @@ p {
 *  SPECIAL PAGES
 */
 
-.error {
-    border-bottom: 2px solid red;
-    text-decoration: none;
-    white-space: pre;
-}
-
 #example {
     margin: auto;
     margin-top: 20px;
@@ -258,10 +248,6 @@ p {
     margin-top: 0.4em;
 }
 
-a.dull, a.dull:hover {
-    text-decoration: none;
-}
-
 /** ANSWERS **/
 
 .ans i {
@@ -292,16 +278,9 @@ a.dull, a.dull:hover {
     font-size: 12px;
 }
 
-.c0{background-color: #fcc;}
-.c1{background-color: #cfc;}
-.c2{background-color: #ccf;}
-.c3{background-color: #ffc;}
-.c4{background-color: #fcf;}
-.c5{background-color: #cff;}
-
 /** PARENTS **/
 
-.from a, .p1, .p2 {
+.from a {
     white-space: nowrap;
     text-decoration: none;
     color: #0E774A;
