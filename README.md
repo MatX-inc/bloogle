@@ -1,156 +1,113 @@
-# Hoogle [![Hackage version](https://img.shields.io/hackage/v/hoogle.svg?label=Hackage)](https://hackage.haskell.org/package/hoogle) [![Stackage version](https://www.stackage.org/package/hoogle/badge/nightly?label=Stackage)](https://www.stackage.org/package/hoogle) [![Build status](https://img.shields.io/github/actions/workflow/status/ndmitchell/hoogle/ci.yml?branch=master)](https://github.com/ndmitchell/hoogle/actions)
+# Bloogle [![Build status](https://img.shields.io/github/actions/workflow/status/MatX-inc/bloogle/ci.yml?branch=master&label=Build)](https://github.com/MatX-inc/bloogle/actions)
 
-Hoogle is a Haskell API search engine, which allows you to search many standard Haskell libraries by either function name, or by approximate type signature. The online version can be found at https://hoogle.haskell.org/ and searches [Stackage](https://www.stackage.org/).
+Bloogle is a [Bluespec Classic](https://github.com/B-Lang-org/bsc) API search engine. It lets you search the Bluespec standard libraries by function name, by approximate type signature, or both. It is a fork of [Hoogle](https://github.com/ndmitchell/hoogle) retargeted from Haskell to Bluespec.
 
-* **Online version:** https://hoogle.haskell.org/
-* **Hackage page:** https://hackage.haskell.org/package/hoogle
-* **Source code:** https://github.com/ndmitchell/hoogle
-* **Bug tracker:** https://github.com/ndmitchell/hoogle/issues
-
-## Hoogle Use
-
-Hoogle can be used in several ways:
-
-* **Online**, with the web interface at https://hoogle.haskell.org/
-* **In [IRC](https://wiki.haskell.org/IRC_channel)**, using the [Lambdabot](https://wiki.haskell.org/Lambdabot) plugin with `@hoogle` and `@hoogle+`
-* **From `emacs`**, by means of [`engine-mode`](https://github.com/hrs/engine-mode)
-* **[Installed locally](./docs/Install.md)**, with either a command line or in a browser
-* **[As a developer](./docs/API.md)**, through Haskell or JSON APIs.
-
-# Searches
+* **Online:** https://bloogle.bluespec.dev/
+* **Source:** https://github.com/MatX-inc/bloogle
+* **Issues:** https://github.com/MatX-inc/bloogle/issues
 
 ## Searching
 
-Here are some example searches:
+A query can be text, a type signature, or a mix of the two:
 
-* `map` searches as text, finding `map`, `concatMap`, `mapM`
-* `con map` searches for the text "map" and "con" finding `concatMap`, but not `map`
+* `mkReg` searches as text, finding `mkReg`, `mkRegU`, `mkRegA`
+* `mk reg` searches for both words, finding `mkRegU` but not `mkFIFO`
 * `a -> a` searches by type, finding `id :: a -> a`
-* `a` searches for the text "a"
-* `:: a` searches for the type "a"
-* `id :: a -> a` searches for the text "id" and the type "a -> a"
+* `:: a` forces a type search for "a"; a bare `a` searches as text
+* `id :: a -> a` searches for the text "id" *and* the type "a -> a"
 
+### Type search
 
-## Scope
+* Matches are by exact arity: `a -> a` won't match `a -> a -> a`
+* Type variables are unified and argument order is ignored
+* `_` wildcards a single argument's type
 
-By default, searches look at the [Haskell Platform](https://www.haskell.org/platform/) and [Haskell keywords](https://wiki.haskell.org/Keywords). However, all [Stackage](https://stackage.org) packages are available to search. As some examples:
+See [`docs/TypeSearch.md`](docs/TypeSearch.md) for how type search works under the hood.
 
-* `mode +cmdargs` searches only the "cmdargs" package
-* `file -base` searches the Haskell Platform, excluding the "base" package
-* `mode +platform +cmdargs` searches both the Haskell Platform and the "cmdargs" package
-* `count +missingh` searches only the "MissingH" package - all packages are written in lower-case
+### Scope
 
-With the set of packages you are searching, you can also restrict the set of modules searched:
+Restrict or exclude results by module:
 
-* `file -System` excludes results from modules such as `System.IO`, `System.FilePath.Windows` and `Distribution.System`
-* `fold +Data.Map` finds results in the `Data.Map` module
+* `fold +Vector` restricts results to the `Vector` module
+* `reg -Vector` excludes the `Vector` module
 
+## Usage
 
-# Integration
+Bloogle always needs a database to read or build — there is no default
+database location, and it never downloads anything. Every command takes an
+explicit `--database`.
 
-## Command Line Version
+### Build a database
 
-To invoke Hoogle type:
+Generate a database from a directory of Bluespec API docs in Hoogle's input
+`.txt` format (one file per package, each beginning with `@package`):
 
-    $ hoogle "[a] -> [b]"
+    $ bloogle generate --local=path/to/docs --database=bluespec.hoo
 
-Note the quotes, otherwise you will redirect the output to the file [b].
+You can also point at a directory of Haddock-style output with
+`--haddock=DIR`. Generating from an online package set is not supported, so a
+bare `bloogle generate` is an error — pass `--local` or `--haddock`.
 
-To ensure you have data files for the Hackage modules, you will first need to
-type:
+### Search from the command line
 
-    $ hoogle generate
+    $ bloogle search --database=bluespec.hoo "Vector n a -> a"
 
-Which will download and build Hoogle databases.
+Quote the query so the shell doesn't interpret the `->` or brackets.
 
-## Command Line UI
+### Run the web server
 
-There is a terminal/curses based UI available through [`cabal install bhoogle`](https://hackage.haskell.org/package/bhoogle).
+    $ bloogle server --database=bluespec.hoo --home=https://bloogle.bluespec.dev
 
-## Chrome Integration
+* `--home` sets the URL the logo links to and the base URL baked into the
+  OpenSearch descriptor (`search.xml`). It defaults to `http://localhost:8080`
+  for local development; set it to your public address when deploying.
+* `--port` chooses the listen port (default 8080).
+* Prometheus metrics are exposed at `/metrics`.
 
-**As a keyword search:** With a keyword search you can type `h map` directly into the location bar to perform a Hoogle search. Go to the [Hoogle website](https://hoogle.haskell.org/) in Chrome, right-click in the Hoogle search field and select "Add as a search engine...". Give it a keyword such as "h".
+Once the server is running, browsers can add Bloogle as a search engine from
+the OpenSearch descriptor it serves, so you can search from the address bar.
 
-## Firefox Integration
+## Building from source
 
-**From the search bar:** Go to the [Hoogle website](https://hoogle.haskell.org/) in Firefox and click on the `⋯` symbol at the right of the URL bar, and select the "Add Search Engine" option. Click the hoogle logo at the bottom of the completion dropdown when searching to perform a Hoogle search.
+Bloogle is a Haskell project built with `cabal` (GHC 9.4 or newer):
 
-**As a keyword search:** With a keyword search you can type `h map` directly into the location bar to perform a Hoogle search. Go to the [Hoogle website](https://hoogle.haskell.org/) in Firefox, right-click in the Hoogle search field and select "Add a Keyword for this Search...". Given it a keyword such as "h".
+    $ git clone git@github.com:MatX-inc/bloogle.git
+    $ cd bloogle
+    $ cabal build
+    $ cabal run bloogle -- <args>      # e.g. generate / search / server
 
-## Others
+The web front-end in `html/` is plain HTML, CSS, and dependency-free vanilla
+JavaScript — there is no front-end build step. The test suite (code tests plus
+a self-contained sample-database test) runs with:
 
-* [Doc Browser](https://github.com/qwfy/doc-browser)
+    $ cabal run bloogle -- test
 
-### The Source Code
+`.ghci` provides a GHCi-based dev workflow (`:opt`, `:test`, etc.) for building
+and running without cabal.
 
-    $ git clone https://github.com/ndmitchell/hoogle.git
+## Project structure
 
-Contributions are most welcome. Hoogle is written in Haskell 98 + Heirarchical Modules, I do not wish to change this. Other than that, I'm pretty flexible about most aspects of Hoogle. The [issue tracker](https://github.com/ndmitchell/hoogle/issues) has many outstanding tasks, but please contact me if you have thoughts on doing something major to Hoogle, so I can give some advice.
+| Directory | Contents |
+|-----------|----------|
+| `src`     | Haskell source |
+| `cbits`   | C implementation of the text search |
+| `html`    | web front-end (HTML, CSS, vanilla JS, images) |
+| `misc`    | logo, keyword list, sample data |
+| `docs`    | additional documentation (parts are inherited from upstream Hoogle and still describe Haskell) |
 
-# Background
+## Relationship to Hoogle
 
-Hoogle work is licensed under the [BSD-3-Clause license](https://github.com/ndmitchell/hoogle/blob/master/LICENSE).
+Bloogle is a fork of [Hoogle](https://github.com/ndmitchell/hoogle) by Neil
+Mitchell. The core search engine, type-search algorithm, and web UI all derive
+from Hoogle. The main differences:
 
-## Theoretical Foundations
+* Indexes Bluespec libraries instead of Haskell/Stackage
+* Generates only from local sources (`--local` / `--haddock`) — no
+  Hackage/Stackage download
+* Requires an explicit `--database` (no default location)
+* Dependency-free front-end (no jQuery) and a Prometheus `/metrics` endpoint
 
-A lot of related work was done by Rittri [1] and Runciman [2] in the late 80's. Since then Di Cosmo [3] has produced a book on type isomorphisms. Unfortunately the implementations that accompanied the earlier works were for functional languages that have since become less popular.
+## License
 
-1. [Mikael Rittri, Using Types as Search Keys in Function Libraries](https://doi.org/10.1145/99370.99384). Proceedings of the fourth international conference on Functional Programming languages and Computer Architecture: 174-183, June 1989.
-2. [Colin Runciman and Ian Toyn, Retrieving reusable software components by polymorphic type](https://doi.org/10.1145/99370.99383). Journal of Functional Programming 1 (2): 191-211, April 1991.
-3. [Roberto Di Cosmo, Isomorphisms of types: from lambda-calculus to information retrieval and language design](https://doi.org/10.1145/270563.571468). Birkhauser, 1995. ISBN-0-8176-3763-X
-
-I have given several presentations on type searching all available from [my home page](https://ndmitchell.com/).
-
-## Project Structure
-
-The folders in the repository, and their meaning are:
-
-cbits             - C implementation of the text search used by hoogle
-
-docs              - documention on hoogle
-
-html              - resources for hoogle's web front-end (html, css, javascript, images, etc.)
-
-misc              - scripts, logos, sample data, etc.
-
-src               - haskell source code
-
-## Similar Tools
-
-I was unaware of any similar tools before starting development, and no other tool has really influenced this tool (except the first on this list). Some related tools are:
-
-* [Google](https://www.google.com/), the leader in online search
-* [Hayoo](https://hackage.haskell.org/package/Hayoo), similar to Hoogle, but with less focus on type search
-* [Krugle](https://www.krugle.com/), search code, but no Haskell :(
-* [Cloogle](https://cloogle.org), for the [Clean](https://clean.cs.ru.nl/Clean) language
-
-
-## Acknowledgements
-
-All code is all &copy; [Neil Mitchell](https://ndmitchell.com/), 2004-present. The initial version was done over my summer holiday, and further work was done during my PhD. During Summer 2008 I was funded to full-time on Hoogle by [Google Summer of Code](https://summerofcode.withgoogle.com/) with the [haskell.org](https://www.haskell.org/) mentoring organisation. Since then I have been working on Hoogle in my spare time. Various people have given lots of useful ideas, including my PhD supervisor [Colin Runciman](https://www-users.cs.york.ac.uk/~colin/), and various members of the [Plasma group](https://www.cs.york.ac.uk/plasma/wiki/). In addition, the following people have also contributed code or significant debugging work:
-
-* Thomas "Bob" Davie
-* Don Stewart
-* Thomas Jager
-* [Gaal Yahas](https://gaal.livejournal.com/)
-* Mike Dodds
-* Niklas Broberg
-* Esa Ilari Vuokko
-* Udo Stenzel
-* [Henk-Jan van Tuyl](https://github.com/HJvT)
-* Gwern Branwen
-* Tillmann Rendel
-* David Waern
-* Ganesh Sittampalam
-* Duncan Coutts
-* Peter Collingbourne
-* Andrea Vezzosi
-* Ian Lynagh
-* [Alfredo Di Napoli](http://www.alfredodinapoli.com)
-
-In previous versions, all the data was taken from [Zvon's Haskell Guide](http://www.zvon.org/other/haskell/Outputglobal/). Thanks to their open and friendly policy of allowing the data to be reused, this project became possible. More recent versions use the Hierarchical Libraries as distributed with GHC, and databases generated by Haddock.
-
-# Interesting links
-
-* https://atom.io/packages/haskell-hoogle
-* https://hackage.haskell.org/package/hoogle-index
+[BSD-3-Clause](LICENSE). &copy; Neil Mitchell 2004-present; Bluespec adaptations
+&copy; MatX.
