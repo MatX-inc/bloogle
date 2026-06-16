@@ -1,12 +1,10 @@
+module Main (main) where
 
-module Main(main) where
-
+import Bloogle
 import System.Environment
 import System.IO
-import Bloogle
-
 
 main :: IO ()
 main = do
-    hSetEncoding stdout utf8
-    bloogle =<< getArgs
+  hSetEncoding stdout utf8
+  bloogle =<< getArgs
