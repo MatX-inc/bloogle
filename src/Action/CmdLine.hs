@@ -78,7 +78,7 @@ getCmdLine argv = do
     Test {} -> pure args1
     _
       | null (database args1) ->
-          errorIO "No database specified: pass --database FILE (build one with 'hoogle generate --local=DIR --database=FILE')"
+          errorIO "No database specified: pass --database FILE (build one with 'bloogle generate --local=DIR --database=FILE')"
       | otherwise -> pure args1
 
   -- fix up people using Hoogle 4 instructions
@@ -98,7 +98,7 @@ cmdLineMode =
   cmdArgsMode $
     modes [search_ &= auto, generate, server, replay, test]
       &= verbosity
-      &= program "hoogle"
+      &= program "bloogle"
       &= summary ("Bloogle " ++ showVersion version ++ ", https://bloogle.bluespec.dev/")
 
 search_ :: CmdLine

@@ -128,7 +128,7 @@ withSearch :: (NFData a) => FilePath -> (StoreRead -> IO a) -> IO a
 withSearch database act = do
   unlessM (doesFileExist database) $ do
     exitFail $
-      "Error, database does not exist (run 'hoogle generate' first)\n"
+      "Error, database does not exist (run 'bloogle generate' first)\n"
         ++ "    Filename: "
         ++ database
   storeReadFile database act

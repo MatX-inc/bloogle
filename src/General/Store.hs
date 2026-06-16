@@ -197,7 +197,7 @@ storeReadFile file act = mmapWithFilePtr file ReadOnly Nothing $ \(ptr, len) -> 
   -- check is longer than my version string
   when (len < (BS.length verString * 2) + intSize) $
     errorIO $
-      "The Hoogle file " ++ file ++ " is corrupt, only " ++ show len ++ " bytes."
+      "The Bloogle file " ++ file ++ " is corrupt, only " ++ show len ++ " bytes."
 
   let verN = BS.length verString
   verEnd <- BS.unsafePackCStringLen (plusPtr ptr $ len - verN, verN)
@@ -206,7 +206,7 @@ storeReadFile file act = mmapWithFilePtr file ReadOnly Nothing $ \(ptr, len) -> 
     if verString /= verStart
       then
         errorIO $
-          "The Hoogle file "
+          "The Bloogle file "
             ++ file
             ++ " is the wrong version or format.\n"
             ++ "Expected: "
@@ -215,12 +215,12 @@ storeReadFile file act = mmapWithFilePtr file ReadOnly Nothing $ \(ptr, len) -> 
             ++ "Got     : "
             ++ map (\x -> if isAlphaNum x || x `elem` "_-. " then x else '?') (trim $ BS.unpack verStart)
       else
-        errorIO $ "The Hoogle file " ++ file ++ " is truncated, probably due to an error during creation."
+        errorIO $ "The Bloogle file " ++ file ++ " is truncated, probably due to an error during creation."
 
   atomSize <- intFromBS <$> BS.unsafePackCStringLen (plusPtr ptr $ len - verN - intSize, intSize)
   when (len < verN + intSize + atomSize) $
     errorIO $
-      "The Hoogle file " ++ file ++ " is corrupt, couldn't read atom table."
+      "The Bloogle file " ++ file ++ " is corrupt, couldn't read atom table."
   atoms <- decodeBS <$> BS.unsafePackCStringLen (plusPtr ptr $ len - verN - intSize - atomSize, atomSize)
   act $ StoreRead file len ptr atoms
 
@@ -231,7 +231,7 @@ storeReadAtom :: forall a t. (Typeable (t a), Typeable a) => StoreRead -> t a ->
 storeReadAtom StoreRead {..} (typeOf -> k) unpack = unsafePerformIO $ do
   let key = show k
   let val = show $ typeRep (Proxy :: Proxy a)
-  let corrupt msg = errorIO $ "The Hoogle file " ++ srFile ++ " is corrupt, " ++ key ++ " " ++ msg ++ "."
+  let corrupt msg = errorIO $ "The Bloogle file " ++ srFile ++ " is corrupt, " ++ key ++ " " ++ msg ++ "."
   case Map.lookup key srAtoms of
     Nothing -> corrupt "is missing"
     Just Atom {..}
