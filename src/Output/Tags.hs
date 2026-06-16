@@ -62,7 +62,7 @@ writeTags store keep extra xs = do
         addRange :: (str -> Bool) -> [(str, [(Maybe TargetId,a)])] -> [(str, (TargetId, TargetId))]
         addRange isNull xs = [(a, (minimum' is, maximum' is)) | (a,b) <- xs, let is = mapMaybe fst b, not (isNull a), is /= []]
 
-        weightTag ("set",x) = fromMaybe 0.9 $ lookup x [("stackage",0.0),("haskell-platform",0.1)]
+        weightTag ("set",_) = 0.9
         weightTag ("package",x) = 1
         weightTag ("category",x) = 2
         weightTag ("license",x) = 3

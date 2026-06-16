@@ -95,7 +95,7 @@ defaultGenerate = generate
 
 cmdLineMode = cmdArgsMode $ modes [search_ &= auto,generate,server,replay,test]
     &= verbosity &= program "hoogle"
-    &= summary ("Hoogle " ++ showVersion version ++ ", https://hoogle.haskell.org/")
+    &= summary ("Bloogle " ++ showVersion version ++ ", https://bloogle.bluespec.dev/")
 
 search_ = Search
     {color = def &= name "colour" &= help "Use colored output (requires ANSI terminal)"
@@ -117,7 +117,7 @@ generate = Generate
     ,count = Nothing &= name "n" &= help "Maximum number of packages to index (defaults to all)"
     ,haddock = def &= help "Use local haddocks"
     ,debug = def &= help "Generate debug information"
-    } &= help "Generate Hoogle databases"
+    } &= help "Generate Bloogle databases"
 
 server = Server
     {port = 8080 &= typ "INT" &= help "Port number"
@@ -133,7 +133,7 @@ server = Server
     ,key = "key.pem" &= typFile &= help "Path to the key pem file (when running an https server)"
     ,datadir = def &= help "Override data directory paths"
     ,no_security_headers = False &= help "Don't send CSP security headers"
-    } &= help "Start a Hoogle server"
+    } &= help "Start a Bloogle server"
 
 replay = Replay
     {logs = "log.txt" &= args &= typ "FILE"

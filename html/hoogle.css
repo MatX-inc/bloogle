@@ -103,7 +103,7 @@ form {
     color: #1565c0;
 }
 
-#hoogle, #scope, #submit {
+#bloogle, #scope, #submit {
     font-size: 16px;
     margin-bottom: 16px;
     vertical-align: bottom;
@@ -112,7 +112,7 @@ form {
     width: 200px;
 }
 
-#hoogle {
+#bloogle {
     width: 300px;
     margin-right: 5px;
     margin-left: 5px;

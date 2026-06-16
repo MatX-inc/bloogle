@@ -132,8 +132,6 @@ readHaskellGhcpkg timing = do
                     let url = "file://" ++ ['/' | not $ all isPathSeparator $ take 1 docs] ++
                               replace "\\" "/" (addTrailingPathSeparator docs)
                     yield (name, url, lbstrFromChunks [src])
-    cbl <- pure $ let ts = map (both strPack) [("set","stackage"),("set","installed")]
-                    in Map.map (\p -> p{packageTags = ts ++ packageTags p}) cbl
     pure (cbl, Map.keysSet cbl, source)
 
 -- | @hoogle generate --haddock=path/to/doc@ works similarly to @hoogle generate --local@,
@@ -169,8 +167,6 @@ readHaskellHaddock timing docBaseDir = do
                     let url = ['/' | not $ all isPathSeparator $ take 1 docs] ++
                               replace "\\" "/" (addTrailingPathSeparator docs)
                     yield (name, url, lbstrFromChunks [src])
-    cbl <- pure $ let ts = map (both strPack) [("set","stackage"),("set","installed")]
-                    in Map.map (\p -> p{packageTags = ts ++ packageTags p}) cbl
     pure (cbl, Map.keysSet cbl, source)
 
     where docDir name Package{..} = name ++ "-" ++ strUnpack packageVersion
@@ -190,7 +186,7 @@ actionGenerate g@Generate{..} = withTiming (if debug then Just $ replaceExtensio
             readHaskellHaddock timing dir
         Nothing
             | [""] <- local_ -> readHaskellGhcpkg timing
-            | [] <- local_ -> errorIO "Nothing to index: pass --local DIR (a directory of Hoogle .txt files) or --haddock DIR. (Generating from Hackage/Stackage online is no longer supported.)"
+            | [] <- local_ -> errorIO "Nothing to index: pass --local DIR (a directory of Bloogle .txt files) or --haddock DIR. (Generating from Hackage/Stackage online is no longer supported.)"
             | otherwise -> readHaskellDirs timing local_
     (cblErrs, popularity) <- evaluate $ packagePopularity cbl
     cbl <- evaluate $ Map.map (\p -> p{packageDepends=[]}) cbl -- clear the memory, since the information is no longer used

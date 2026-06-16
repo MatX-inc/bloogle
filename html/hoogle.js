@@ -4,7 +4,7 @@
 var instant = true; // should we search on key presses
 var query = parseQuery(); // what is the current query string
 
-var hoogleEl; // document.getElementById("hoogle") after load
+var bloogleEl; // document.getElementById("bloogle") after load
 
 
 /////////////////////////////////////////////////////////////////////
@@ -37,12 +37,12 @@ function on_arrow_press(ev) {
         var activeEl = results[activeRow];
         if (newRow < 0) {
             if (activeEl) activeEl.classList.remove("active");
-            hoogleEl.focus();
+            bloogleEl.focus();
         } else if (newRow < results.length) {
             var newEl = results[newRow];
             if (activeRow >= 0 && activeEl) activeEl.classList.remove("active");
             newEl.classList.add("active");
-            hoogleEl.blur();
+            bloogleEl.blur();
         }
     }
 }
@@ -52,13 +52,13 @@ ready(function() {
 });
 
 ready(function(){
-    hoogleEl = document.getElementById("hoogle");
-    var form = hoogleEl.closest("form");
+    bloogleEl = document.getElementById("bloogle");
+    var form = bloogleEl.closest("form");
     var scopeEl = form.querySelector("[name=scope]");
 
     var self = newReal();
 
-    var active = hoogleEl.value + " " + scopeEl.value; // What is currently being searched for (may not yet be displayed)
+    var active = bloogleEl.value + " " + scopeEl.value; // What is currently being searched for (may not yet be displayed)
     var past = cache(100); // Cache of previous searches
     var watch = watchdog(500, function(){self.showWaiting();}); // Timeout of the "Waiting..." callback
 
@@ -69,14 +69,14 @@ ready(function(){
             return v == null || v == "set:stackage" ? "" : v;
         }
 
-        var nowHoogle = hoogleEl.value;
+        var nowBloogle = bloogleEl.value;
         var nowScope = getScope();
-        var now = nowHoogle + " " + nowScope;
+        var now = nowBloogle + " " + nowScope;
         if (now == active) return;
         active = now;
 
         var title = now + (now == " " ? "" : " - ") + "Bloogle";
-        query["hoogle"] = nowHoogle;
+        query["bloogle"] = nowBloogle;
         query["scope"] = nowScope;
         if (window.history)
             window.history.replaceState(null, title, renderQuery(query));
@@ -88,14 +88,14 @@ ready(function(){
         watch.stop();
         watch.start();
 
-        var url = "?" + new URLSearchParams({hoogle:nowHoogle, scope:nowScope, mode:"body"});
+        var url = "?" + new URLSearchParams({bloogle:nowBloogle, scope:nowScope, mode:"body"});
         fetch(url, {headers: {"Accept": "text/html"}})
             .then(function(resp){
                 return resp.text().then(function(text){ return {status:resp.status, text:text}; });
             })
             .then(function(r){
                 watch.stop();
-                var current = hoogleEl.value + " " + getScope() == now;
+                var current = bloogleEl.value + " " + getScope() == now;
                 if (r.status == 200){
                     past.add(now, r.text);
                     if (current) self.showResult(r.text);
@@ -105,13 +105,13 @@ ready(function(){
             })
             .catch(function(){ watch.stop(); });
     };
-    hoogleEl.addEventListener("keyup", hit);
+    bloogleEl.addEventListener("keyup", hit);
     scopeEl.addEventListener("change", hit);
 })
 
 function newReal()
 {
-    hoogleEl.select();
+    bloogleEl.select();
     var body = document.getElementById("body");
 
     return {
@@ -194,7 +194,7 @@ function newDocs()
 
 ready(function(){
     if (inputSearch)
-        hoogleEl.type = "search";
+        bloogleEl.type = "search";
 
     var qphone = query["phone"];
     var phone =

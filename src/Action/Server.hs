@@ -56,7 +56,7 @@ actionServer cmd@Server{..} = do
     putStr "Reading log..." >> hFlush stdout
     time <- offsetTime
     log <- logCreate (if logs == "" then Left stdout else Right logs) $
-        \x -> BS.pack "hoogle=" `BS.isInfixOf` x && not (BS.pack "is:ping" `BS.isInfixOf` x)
+        \x -> BS.pack "bloogle=" `BS.isInfixOf` x && not (BS.pack "is:ping" `BS.isInfixOf` x)
     putStrLn . showDuration =<< time
     evaluate spawned
     dataDir <- maybe getDataDir pure datadir
@@ -91,8 +91,8 @@ replyServer log local links haddock store home htmlDir scope Input{..} = case in
             grabInt name def = fromMaybe def $ readMaybe =<< listToMaybe (grab name) :: Int
 
         let qScope = let xs = grab "scope" in [scope | null xs && scope /= ""] ++ xs
-        let qSearch = grabBy (`elem` ["hoogle","q"])
-        let qSource = qSearch ++ filter (/= "set:stackage") qScope
+        let qSearch = grabBy (`elem` ["bloogle","q"])
+        let qSource = qSearch ++ qScope
         let q = concatMap parseQuery qSource
         let (q2, results) = search store q
         let body = showResults local links haddock (filter ((/= "mode") . fst) inputArgs) q2 $
@@ -200,9 +200,9 @@ showResults local links haddock args query results = do
         useLink _ = Nothing
 
         add x = ("?" ++) $ intercalate "&" $ map (joinPair "=") $
-            case break ((==) "hoogle" . fst) args of
-                (a,[]) -> a ++ [("hoogle", escapeURL x)]
-                (a,(_,x1):b) -> a ++ [("hoogle", escapeURL $ x1 ++ " " ++ x)] ++ b
+            case break ((==) "bloogle" . fst) args of
+                (a,[]) -> a ++ [("bloogle", escapeURL x)]
+                (a,(_,x1):b) -> a ++ [("bloogle", escapeURL $ x1 ++ " " ++ x)] ++ b
 
         f cat val = do
             H.a ! H.class_" minus" ! H.href (H.stringValue $ add $ "-" ++ cat ++ ":" ++ val) $ ""
@@ -264,21 +264,16 @@ action_server_test_ = do
         "foo" === "<i>module</i> Foo.Bar.<s0>F{Foo}</s0>"
         "foo" === "<i>module</i> <s0>{Foo}o</s0>"
 
-action_server_test :: Bool -> FilePath -> IO ()
-action_server_test sample database = do
+action_server_test :: FilePath -> IO ()
+action_server_test database = do
     testing "Action.Server.replyServer" $ withSearch database $ \store -> do
         log <- logNone
         dataDir <- getDataDir
         let check p q = do
-                OutputHTML (lbstrUnpack -> res) <- replyServer log False False Nothing store "" (dataDir </> "html") "" (Input [] [("hoogle",q)])
+                OutputHTML (lbstrUnpack -> res) <- replyServer log False False Nothing store "" (dataDir </> "html") "" (Input [] [("bloogle",q)])
                 if p res then putChar '.' else fail $ "Bad substring: " ++ res
         let q === want = check (want `isInfixOf`) q
         let q /== want = check (not . isInfixOf want) q
         "<test" /== "<test"
         "&test" /== "&test"
-        if sample then
-            "Wife" === "<b>type family</b>"
-         else do
-            "<>" === "<span class=name>(<b>&lt;&gt;</b>)</span>"
-            "filt" === "<span class=name><b>filt</b>er</span>"
-            "True" === "https://hackage.haskell.org/package/base/docs/Prelude.html#v:True"
+        "Wife" === "<b>type family</b>"

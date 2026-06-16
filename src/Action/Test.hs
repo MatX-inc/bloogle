@@ -29,6 +29,6 @@ actionTest Test{..} = withBuffering stdout NoBuffering $ withTempFile $ \sample 
 
     putStrLn "Sample database tests"
     actionGenerate defaultGenerate{database=sample, local_=["misc/sample-data"]}
-    action_search_test True sample
-    unless disable_network_tests $ action_server_test True sample
+    action_search_test sample
+    unless disable_network_tests $ action_server_test sample
     putStrLn ""
