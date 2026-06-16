@@ -159,7 +159,7 @@ readHaskellHaddock :: Timing -> FilePath -> IO (Map.Map PkgName Package, Set.Set
 readHaskellHaddock timing docBaseDir = do
     cbl <- timed timing "Reading ghc-pkg" readGhcPkg
     let source =
-            forM_ (Map.toList cbl) $ \(name, p@Package{..}) -> do
+            forM_ (Map.toList cbl) $ \(name, p) -> do
                 let docs = docDir (unPackageName name) p
                     file = docBaseDir </> docs </> unPackageName name <.> "txt"
                 whenM (liftIO $ doesFileExist file) $ do

@@ -11,11 +11,9 @@ module Action.CmdLine(
 import Control.Exception.Extra (errorIO)
 import Data.List.Extra
 import Data.Version
-import General.Util
 import Paths_bloogle (version)
 import System.Console.CmdArgs
 import System.Environment
-import System.FilePath
 
 data CmdLine
     = Search

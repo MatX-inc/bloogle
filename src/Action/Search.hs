@@ -15,7 +15,6 @@ import qualified Data.Aeson as JSON
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import Data.Functor.Identity
 import Data.List.Extra
-import qualified Data.Map as Map
 import Data.Maybe
 import qualified Data.Set as Set
 import System.Directory

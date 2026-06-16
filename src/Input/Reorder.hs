@@ -6,7 +6,6 @@ import Input.Item
 import Data.List.Extra
 import Data.Tuple.Extra
 import General.Util
-import General.Str
 import Distribution.Types.PackageName (mkPackageName)
 
 

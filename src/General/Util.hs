@@ -34,7 +34,6 @@ import Data.Either.Extra
 import Data.Semigroup
 import Data.Tuple.Extra
 import Control.Monad.Extra
-import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Map as Map
 import Data.Ix
 import Numeric.Extra

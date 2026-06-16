@@ -26,7 +26,6 @@ import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.Map as Map
 import System.Time.Extra
 import Data.Time.Clock
-import Data.Time.Calendar
 import System.IO.Unsafe
 import Numeric.Extra
 import System.Info.Extra
