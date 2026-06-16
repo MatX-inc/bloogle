@@ -9,7 +9,6 @@
     </Description>
     <Tags>bluespec</Tags>
     <Url type="text/html" template="#{home}/?bloogle={searchTerms}"/>
-    <Url type="application/x-suggestions+json" template="#{home}/?bloogle={searchTerms}&amp;mode=suggest"/>
 
     <Image height="16" width="16" type="image/png">#{home}/favicon.png</Image>
     <Image height="64" width="64" type="image/png">#{home}/favicon64.png</Image>

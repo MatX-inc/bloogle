@@ -103,7 +103,13 @@ ready(function(){
                     self.showError(r.status, r.text);
                 }
             })
-            .catch(function(){ watch.stop(); });
+            .catch(function(){
+                watch.stop();
+                // Network/connection failure: clear the "Still working..." state
+                // and surface an error, rather than leaving the page frozen.
+                if (bloogleEl.value + " " + getScope() == now)
+                    self.showError(0, "Could not reach the server — check your connection and try again.");
+            });
     };
     bloogleEl.addEventListener("keyup", hit);
     scopeEl.addEventListener("change", hit);
@@ -116,7 +122,20 @@ function newReal()
 
     return {
         showWaiting: function(){document.querySelector("h1").textContent = "Still working...";},
-        showError: function(status,text){body.innerHTML = "<h1><b>Error:</b> status " + status + "</h1><p>" + text + "</p>";},
+        // Build the error DOM with textContent so a server message (e.g. a 500
+        // body that echoes the query) can never be interpreted as HTML.
+        showError: function(status,text){
+            body.textContent = "";
+            var h1 = document.createElement("h1");
+            var b = document.createElement("b");
+            b.textContent = "Error:";
+            h1.appendChild(b);
+            if (status) h1.appendChild(document.createTextNode(" status " + status));
+            var p = document.createElement("p");
+            p.textContent = text;
+            body.appendChild(h1);
+            body.appendChild(p);
+        },
         showResult: function(text){body.innerHTML = text; newDocs();}
     }
 }
@@ -239,15 +258,20 @@ var Key = {
 
 function cache(maxElems)
 {
-    // FIXME: Currently does not evict things
     var contents = {}; // what we have in the cache, with # prepended
     // note that contents[toString] != undefined, since it's a default method
     // hence the leading #
+    var order = []; // prefixed keys in insertion order, oldest first
 
     return {
         add: function(key,val)
         {
-            contents["#" + key] = val;
+            var k = "#" + key;
+            if (!(k in contents)) order.push(k);
+            contents[k] = val;
+            // Evict oldest entries once we exceed the requested capacity.
+            while (order.length > maxElems)
+                delete contents[order.shift()];
         },
 
         ask: function(key)
