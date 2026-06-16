@@ -1,4 +1,25 @@
-Changelog for Hoogle (* = API change, @ = database format change)
+Changelog for Bloogle (* = API change, @ = database format change)
+
+Bloogle is a Bluespec API search engine, forked from Hoogle 5.0.19. The
+Bloogle changes are listed first, followed by the inherited Hoogle changelog.
+
+Bloogle (unreleased)
+    Rebrand as Bloogle, a Bluespec (Classic) API search engine: rename the
+        package, binary, library module, web UI, docs, and search query param
+    Generate only from local sources (--local / --haddock); remove the online
+        Hackage/Stackage download path
+    Require an explicit --database; remove the default ~/.hoogle location
+    Drop Frege support and the Language type
+    Remove the settings system (Input.Settings and misc/settings.txt)
+    Replace the Flot-based /log dashboard with a Prometheus /metrics endpoint
+    Make the web front-end dependency-free: drop jQuery and the chosen plugin
+        in favour of vanilla JS and a native <select>
+    Drive asset URLs and the OpenSearch descriptor from --home; remove --cdn
+    Format the codebase with ormolu and build cleanly under -Wall
+    Drop now-unused dependencies: js-jquery, js-flot, hackage-revdeps,
+        http-conduit, crypton-connection, resourcet, template-haskell
+
+Inherited Hoogle changelog
 
 5.0.19, released 2026-01-19
     Migrate (half of) parsing from haskell-src-exts to ghc-lib-parser
