@@ -123,37 +123,6 @@ function newReal()
 
 
 /////////////////////////////////////////////////////////////////////
-// SEARCH PLUGIN
-
-var prefixUrl = document.location.protocol + "//" + document.location.hostname + document.location.pathname;
-
-ready(function(){
-    if (prefixUrl != "http://hoogle.haskell.org/")
-    {
-        var link = document.querySelector("link[rel=search]");
-        if (link) link.href = link.href + "?domain=" + escape(prefixUrl);
-    }
-    if (window.external && ("AddSearchProvider" in window.external))
-    {
-        var plugin = document.getElementById("plugin");
-        if (plugin)
-        {
-            plugin.style.display = "inline";
-            plugin.addEventListener("click", function(){
-                var link = document.querySelector("link[rel=search]");
-                var url = link.getAttribute("href");
-                //  If neither scheme(http(s)://) nor DSN prefix(//) is in URL then we
-                //  should add prefix.
-                if (url.indexOf('://') === -1 && url.indexOf('//') !== 0)
-                    url = prefixUrl + url;
-                window.external.AddSearchProvider(url);
-            });
-        }
-    }
-});
-
-
-/////////////////////////////////////////////////////////////////////
 // DOCUMENTATION
 
 ready(function(){
