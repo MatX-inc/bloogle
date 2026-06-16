@@ -1,5 +1,5 @@
 
-module Paths_hoogle where
+module Paths_bloogle where
 
 import Data.Version.Extra
 

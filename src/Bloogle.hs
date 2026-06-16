@@ -1,9 +1,9 @@
 
--- | High level Hoogle API
-module Hoogle(
+-- | High level Bloogle API
+module Bloogle(
     Database, withDatabase, searchDatabase,
     Target(..), URL,
-    hoogle,
+    bloogle,
     targetInfo,
     targetResultDisplay
     ) where
@@ -22,7 +22,7 @@ import Action.Server
 import Action.Test
 
 
--- | Database containing Hoogle search data.
+-- | Database containing Bloogle search data.
 newtype Database = Database StoreRead
 
 -- | Load a database from a file.
@@ -34,9 +34,9 @@ searchDatabase :: Database -> String -> [Target]
 searchDatabase (Database db) query = snd $ search db $ parseQuery query
 
 
--- | Run a command line Hoogle operation.
-hoogle :: [String] -> IO ()
-hoogle args = do
+-- | Run a command line Bloogle operation.
+bloogle :: [String] -> IO ()
+bloogle args = do
     args <- getCmdLine args
     case args of
         Search{} -> actionSearch args

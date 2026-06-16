@@ -1,6 +1,6 @@
 cabal-version:      1.18
 build-type:         Simple
-name:               hoogle
+name:               bloogle
 version:            5.0.19.0
 license:            BSD3
 license-file:       LICENSE
@@ -8,13 +8,13 @@ category:           Development
 author:             Neil Mitchell <ndmitchell@gmail.com>
 maintainer:         Neil Mitchell <ndmitchell@gmail.com>
 copyright:          Neil Mitchell 2004-2026
-synopsis:           Haskell API Search
+synopsis:           Bluespec API Search
 description:
-    Hoogle is a Haskell API search engine, which allows you to
-    search many standard Haskell libraries by either function name,
-    or by approximate type signature.
-homepage:           https://hoogle.haskell.org/
-bug-reports:        https://github.com/ndmitchell/hoogle/issues
+    Bloogle is a Bluespec API search engine, which allows you to
+    search the Bluespec standard libraries by either function name,
+    or by approximate type signature. It is a fork of Hoogle.
+homepage:           https://bloogle.bluespec.dev/
+bug-reports:        https://github.com/MatX-inc/bloogle/issues
 tested-with:        GHC==9.8, GHC==9.6, GHC==9.4
 extra-doc-files:
     README.md
@@ -34,7 +34,7 @@ data-files:
 
 source-repository head
     type:     git
-    location: https://github.com/ndmitchell/hoogle.git
+    location: https://github.com/MatX-inc/bloogle.git
 
 library
     hs-source-dirs:     src
@@ -95,10 +95,10 @@ library
         build-depends: semigroups >= 0.18
 
     exposed-modules:
-        Hoogle
+        Bloogle
 
     other-modules:
-        Paths_hoogle
+        Paths_bloogle
         Action.CmdLine
         Action.Generate
         Action.Search
@@ -125,11 +125,11 @@ library
         General.Web
 
 
-executable hoogle
+executable bloogle
     main-is:            src/Main.hs
     default-language:   Haskell2010
     ghc-options:        -threaded -rtsopts
 
     build-depends:
         base >= 4 && < 5,
-        hoogle
+        bloogle

@@ -31,7 +31,7 @@ import Foreign.Ptr
 import Foreign.Storable
 import General.Util
 import Numeric.Extra
-import Paths_hoogle
+import Paths_bloogle
 import Prelude
 import System.Directory (renameFile)
 import System.FilePath (takeDirectory, takeFileName)

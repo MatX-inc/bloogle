@@ -15,7 +15,7 @@ import qualified Text.Blaze.XHtml5 as H
 import qualified Text.Blaze.XHtml5.Attributes as H
 import Data.Tuple.Extra
 import Data.Version
-import Paths_hoogle
+import Paths_bloogle
 import Data.Maybe
 import Control.Monad.Extra
 import Text.Read
