@@ -33,7 +33,7 @@ import General.Util
 import Network.HTTP.Types (decodePathSegments, parseQuery)
 import Network.HTTP.Types.Status
 import Network.Wai
-import Network.Wai.Handler.Warp hiding (Handle, Port)
+import Network.Wai.Handler.Warp hiding (Port)
 import Network.Wai.Handler.WarpTLS
 import Network.Wai.Logger
 import Network.Wai.Middleware.Prometheus (prometheus)
@@ -95,7 +95,7 @@ instance NFData Output where
   rnf x = forceBS x `seq` ()
 
 server :: Log -> CmdLine -> (Input -> IO Output) -> IO ()
-server log Server {..} act = do
+server log' Server {..} act = do
   let host' =
         fromString $
           if host == ""
@@ -173,7 +173,7 @@ server log Server {..} act = do
               ("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
             ]
 
-  logAddMessage log $ "Server starting on port " ++ show port ++ " and host/IP " ++ show host'
+  logAddMessage log' $ "Server starting on port " ++ show port ++ " and host/IP " ++ show host'
 
   -- Serve Prometheus metrics at /metrics, and instrument every other request
   -- (latency histogram, status codes) for scraping by Prometheus / GCP Managed
@@ -186,7 +186,7 @@ server log Server {..} act = do
       Just pay ->
         handle_ (fmap Left . showException) $ do
           s <- act pay; bs <- evaluate $ forceBS s; pure $ Right (s, bs)
-    logAddEntry log (showSockAddr $ remoteHost req) pq time (either Just (const Nothing) res)
+    logAddEntry log' (showSockAddr $ remoteHost req) pq time (either Just (const Nothing) res)
     case res of
       Left s -> reply $ responseLBS status500 [] $ LBS.pack s
       Right (v, bs) -> reply $ case v of
@@ -202,7 +202,9 @@ server log Server {..} act = do
         OutputHTML {} -> responseLBS status200 (("content-type", "text/html") : secH) bs
         OutputXML {} -> responseLBS status200 (("content-type", "application/opensearchdescription+xml") : secH) bs
         OutputJavascript {} -> responseLBS status200 (("content-type", "text/javascript") : secH) bs
+server _ _ _ = error "server: expected a Server command-line configuration"
 
+contentType :: [(String, UTF8.ByteString)]
 contentType = [(".html", "text/html"), (".css", "text/css"), (".js", "text/javascript")]
 
 general_web_test :: IO ()

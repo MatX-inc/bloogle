@@ -38,6 +38,7 @@ inputItem (url : pkg : modu : typ : self : docs) =
   where
     f "." = Nothing
     f x = Just $ word1 x
+inputItem _ = error "inputItem: unexpected input"
 
 -- write all the URLs, docs and enough info to pretty print it to a result
 -- and replace each with an identifier (index in the space) - big reduction in memory
@@ -45,8 +46,8 @@ writeItems :: StoreWrite -> (ConduitM (Maybe Target, item) (Maybe TargetId, item
 writeItems store act = act $ do
   void $ (\f -> mapAccumMC f 0) $ \pos (target, item) -> case target of
     Nothing -> pure (pos, (Nothing, item))
-    Just target -> do
-      let bs = LBS.toStrict $ GZip.compress $ lbstrPack $ unlines $ outputItem target
+    Just target' -> do
+      let bs = LBS.toStrict $ GZip.compress $ lbstrPack $ unlines $ outputItem target'
       liftIO $ do
         storeWritePart store Items $ intToBS $ BS.length bs
         storeWritePart store Items bs
@@ -58,10 +59,10 @@ listItems store = unfoldr f $ storeRead store Items
   where
     f x
       | BS.null x = Nothing
-      | (n, x) <- BS.splitAt intSize x,
-        n <- intFromBS n,
-        (this, x) <- BS.splitAt n x =
-          Just (inputItem $ lines $ UTF8.toString $ GZip.decompress $ LBS.fromChunks [this], x)
+      | (n, x') <- BS.splitAt intSize x,
+        n' <- intFromBS n,
+        (this, x'') <- BS.splitAt n' x' =
+          Just (inputItem $ lines $ UTF8.toString $ GZip.decompress $ LBS.fromChunks [this], x'')
 
 lookupItem :: StoreRead -> (TargetId -> Target)
 lookupItem store =

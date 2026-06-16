@@ -51,11 +51,11 @@ writeTypes :: StoreWrite -> Maybe FilePath -> [(Maybe TargetId, Item)] -> IO ()
 writeTypes store debug xs = do
   let debugger ext body = whenJust debug $ \file -> writeFileUTF8 (file <.> ext) body
   inst <- pure $ Map.fromListWith (+) [(fromIString x, 1) | (_, IInstance (Sig _ [TCon x _])) <- xs]
-  xs <- writeDuplicates store [(i, fromIString <$> t) | (Just i, ISignature t) <- xs]
-  names <- writeNames store debugger inst xs
-  xs <- pure $ map (lookupNames names (error "Unknown name in writeTypes")) xs
-  writeFingerprints store xs
-  writeSignatures store xs
+  xs' <- writeDuplicates store [(i, fromIString <$> t) | (Just i, ISignature t) <- xs]
+  names <- writeNames store debugger inst xs'
+  xs'' <- pure $ map (lookupNames names (error "Unknown name in writeTypes")) xs'
+  writeFingerprints store xs''
+  writeSignatures store xs''
 
 searchTypes :: StoreRead -> Sig String -> [TargetId]
 searchTypes store q =
@@ -108,7 +108,7 @@ searchTypes store q =
     maybeCtor = lookupCtor store names "Maybe"
 
 lookupCtor :: StoreRead -> Names -> String -> Name
-lookupCtor store names c =
+lookupCtor _store names c =
   case sigTy (lookupNames names name0 s) of
     [TCon n _] -> n
     _ -> name0
@@ -118,7 +118,7 @@ lookupCtor store names c =
 searchFingerprintsDebug :: StoreRead -> (String, Sig String) -> [(String, Sig String)] -> [String]
 searchFingerprintsDebug store query answers =
   intercalate [""] $
-    f False "Query" query : zipWithFrom (\i -> f True ("Answer " ++ show i)) 1 answers
+    f False "Query" query : zipWithFrom (\i -> f True ("Answer " ++ show i)) (1 :: Int) answers
   where
     qsig = lookupNames names name0 $ strPack <$> snd query
     names = readNames store
@@ -158,6 +158,7 @@ type NameWord = Word32
 -- There are currently about 14K names, so about 25% of the bit patterns are taken
 newtype Name = Name NameWord deriving (Eq, Ord, Show, Data, Typeable, Storable, Binary)
 
+name0 :: Name
 name0 = Name 0 -- use to represent _
 
 isCon, isVar :: Name -> Bool
@@ -203,9 +204,9 @@ writeNames store debug inst xs = do
               concatMap sigNames xs
   let names = spreadNames $ Map.toList freq
   debug "names" $ unlines [strUnpack s ++ " = " ++ show n ++ " (" ++ show (freq Map.! s) ++ " uses)" | (s, n) <- names]
-  names <- pure $ sortOn fst names
-  storeWrite store TypesNames (bstr0Join $ map (strUnpack . fst) names, V.fromList $ map snd names)
-  let mp2 = Map.fromAscList names
+  names' <- pure $ sortOn fst names
+  storeWrite store TypesNames (bstr0Join $ map (strUnpack . fst) names', V.fromList $ map snd names')
+  let mp2 = Map.fromAscList names'
   pure $ Names $ \x -> Map.lookup x mp2
 
 -- | Given a list of names, spread them out uniquely over the range [Name 100 .. Name maxBound]
@@ -214,22 +215,24 @@ spreadNames :: [(a, Int)] -> [(a, Name)]
 spreadNames [] = []
 spreadNames (sortOn (negate . snd) -> xs@((_, limit) : _)) = check $ f (99 + fromIntegral (length xs)) maxBound xs
   where
-    check xs
-      | all (isCon . snd) xs && length (nubOrd $ map snd xs) == length xs = xs
-      | otherwise = error $ "Invalid spreadNames, length=" ++ show (length xs)
+    check xs'
+      | all (isCon . snd) xs' && length (nubOrd $ map snd xs') == length xs' = xs'
+      | otherwise = error $ "Invalid spreadNames, length=" ++ show (length xs')
 
     -- I can only assign values between mn and mx inclusive
     f :: NameWord -> NameWord -> [(a, Int)] -> [(a, Name)]
-    f !mn !mx [] = []
-    f mn mx ((a, i) : xs) = (a, Name real) : f (mn - 1) (real - 1) xs
+    f !_mn !_mx [] = []
+    f mn mx ((a, i) : xs') = (a, Name real) : f (mn - 1) (real - 1) xs'
       where
         real = fromIntegral $ max mn $ min mx ideal
-        ideal = mn + floor (fromIntegral (min commonNameThreshold i) * fromIntegral (mx - mn) / fromIntegral (min commonNameThreshold limit))
+        ideal = mn + floor (fromIntegral (min commonNameThreshold i) * fromIntegral (mx - mn) / fromIntegral (min commonNameThreshold limit) :: Double)
+spreadNames _ = error "spreadNames: unexpected input"
 
 -- WARNING: Magic constant.
 -- Beyond this count names don't accumulate extra points for being common.
 -- Ensures that things like Bool (4523 uses) ranks much higher than ShakeOptions (24 uses) by not having
 -- [] (10237 uses) skew the curve too much and use up all the available bits of discrimination.
+commonNameThreshold :: Int
 commonNameThreshold = 1024
 
 readNames :: StoreRead -> Names
@@ -253,7 +256,7 @@ newtype Duplicates = Duplicates {expandDuplicates :: Int -> [TargetId]}
 writeDuplicates :: (Ord a) => StoreWrite -> [(TargetId, Sig a)] -> IO [Sig a]
 writeDuplicates store xs = do
   -- s=signature, t=targetid, p=popularity (incoing index), i=index (outgoing index)
-  xs <-
+  xs' <-
     pure $
       map (second snd) $
         sortOn (fst . snd) $
@@ -262,8 +265,8 @@ writeDuplicates store xs = do
               (\(x1, x2) (y1, y2) -> (,x2 ++ y2) $! min x1 y1)
               [(s, (p, [t])) | (p, (t, s)) <- zipFrom (0 :: Int) xs]
   -- give a list of TargetId's at each index
-  storeWrite store TypesDuplicates $ jaggedFromList $ map (reverse . snd) xs
-  pure $ map fst xs
+  storeWrite store TypesDuplicates $ jaggedFromList $ map (reverse . snd) xs'
+  pure $ map fst xs'
 
 readDuplicates :: StoreRead -> Duplicates
 readDuplicates store = Duplicates $ V.toList . ask
@@ -318,7 +321,9 @@ instance Storable Fingerprint where
 toFingerprint :: Sig Name -> Fingerprint
 toFingerprint sig = Fingerprint {..}
   where
-    fpRare1 : fpRare2 : fpRare3 : _ = sort (nubOrd $ filter isCon $ universeBi sig) ++ [name0, name0, name0]
+    (fpRare1, fpRare2, fpRare3) = case sort (nubOrd $ filter isCon $ universeBi sig) ++ [name0, name0, name0] of
+      r1 : r2 : r3 : _ -> (r1, r2, r3)
+      _ -> error "toFingerprint: impossible, list always has at least 3 elements"
     fpArity = fromIntegral $ min 255 $ max 0 $ pred $ length $ sigTy sig
     fpTerms = fromIntegral $ min 255 $ length (universeBi sig :: [Name])
 
@@ -420,8 +425,8 @@ writeSignatures store xs = do
     let b = encodeBS x
     storeWritePart store TypesSigData b
     VM.write v i $ fromIntegral $ BS.length b
-  v <- V.freeze v
-  storeWrite store TypesSigPositions v
+  v' <- V.freeze v
+  storeWrite store TypesSigPositions v'
 
 type SigLoc = (Word32, Word32)
 
@@ -457,7 +462,7 @@ searchTypeMatch possibilities getSig arrow n sig =
       fst
       n
       [ (500 * v + fv, i)
-      | (fv, (i, sigIdx, f)) <- possibilities,
+      | (fv, (i, sigIdx, _f)) <- possibilities,
         v <- maybeToList (matchType arrow sig $ getSig sigIdx)
       ]
 
@@ -497,15 +502,15 @@ matches (lhs, lctx) (rhs, rctx) = runST $ evalStateT (getWork go) (Work 0)
           qryNCs <- Set.fromList <$> (mapM normalize qryC)
           ansNCs <- Set.fromList <$> (mapM normalize ansC)
 
-          nqry <- lift $ normalizeTy qry
-          nans <- lift $ normalizeTy ans
+          _nqry <- lift $ normalizeTy qry
+          _nans <- lift $ normalizeTy ans
 
           -- Discharge constraints; remove any answer-constraint that is also a query-constraint,
           -- and then remove any remaining answer-constraint that is constraining a concrete type.
           -- TODO: keep constrained concrete types but weight them differently if they correspond
           --       to a known instance (e.g. free if we know the instance, rather expensive otherwise).
           let addl = filter isAbstract (Set.toList $ ansNCs `Set.difference` qryNCs)
-              isAbstract (Ctx c a) = isVar a
+              isAbstract (Ctx _c a) = isVar a
 
           workDelta (Work (3 * length addl))
 

@@ -24,7 +24,7 @@ reorderItems :: (PkgName -> Int) -> [(a, Item)] -> [(a, Item)]
 reorderItems packageOrder xs =
   concatMap snd $ sortOn ((packageOrderHacks packageOrder &&& id) . fst) $ map rebase $ splitIPackage xs
   where
-    refunc = map $ second $ \(x : xs) -> x : sortOn (itemName . snd) xs
+    refunc = map $ second $ \ys -> case ys of (x : xs') -> x : sortOn (itemName . snd) xs'; [] -> []
     -- module ordering used to be configurable via settings; with that gone
     -- modules just sort by name
-    rebase (x, xs) = (x, concatMap snd $ sortOn fst $ refunc $ splitIModule xs)
+    rebase (x, xs') = (x, concatMap snd $ sortOn fst $ refunc $ splitIModule xs')

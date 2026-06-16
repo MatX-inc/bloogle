@@ -72,12 +72,13 @@ writeTags store keep extra xs = do
         ++ map (joinPair ":") (sortOn (weightTag &&& both lower) $ nubOrd [ex | (p, _) <- packages, keep p, ex <- extra p, fst ex /= "set"])
   where
     addRange :: (str -> Bool) -> [(str, [(Maybe TargetId, a)])] -> [(str, (TargetId, TargetId))]
-    addRange isNull xs = [(a, (minimum' is, maximum' is)) | (a, b) <- xs, let is = mapMaybe fst b, not (isNull a), is /= []]
+    addRange isNull xs' = [(a, (minimum' is, maximum' is)) | (a, b) <- xs', let is = mapMaybe fst b, not (isNull a), is /= []]
 
+    weightTag :: (String, String) -> Double
     weightTag ("set", _) = 0.9
-    weightTag ("package", x) = 1
-    weightTag ("category", x) = 2
-    weightTag ("license", x) = 3
+    weightTag ("package", _x) = 1
+    weightTag ("category", _x) = 2
+    weightTag ("license", _x) = 3
     weightTag _ = 4
 
 ---------------------------------------------------------------------
@@ -127,10 +128,10 @@ resolveTag store x = case x of
   IsModule -> (IsModule, Just $ map (dupe . fst) $ V.toList moduleIds)
   EqPackage orig@(BS.pack -> val)
     -- look for people who are an exact prefix, sort by remaining length, if there are ties, pick the first one
-    | res@(_ : _) <- [(BS.length x, (i, x)) | (i, x) <- zipFrom 0 $ bstr0Split packageNames, val `BS.isPrefixOf` x] ->
-        let (i, x) = snd $ minimumBy (compare `on` fst) res in (EqPackage $ BS.unpack x, Just [packageIds V.! i])
+    | res@(_ : _) <- [(BS.length x', (i, x')) | (i, x') <- zipFrom 0 $ bstr0Split packageNames, val `BS.isPrefixOf` x'] ->
+        let (i, x') = snd $ minimumBy (compare `on` fst) res in (EqPackage $ BS.unpack x', Just [packageIds V.! i])
     | otherwise -> (EqPackage orig, Just [])
-  EqModule x -> (EqModule x, Just $ map (moduleIds V.!) $ findIndices (eqModule $ lower x) $ bstr0Split moduleNames)
+  EqModule x' -> (EqModule x', Just $ map (moduleIds V.!) $ findIndices (eqModule $ lower x') $ bstr0Split moduleNames)
   EqCategory cat val ->
     ( EqCategory cat val,
       Just $
@@ -140,11 +141,11 @@ resolveTag store x = case x of
           ]
     )
   where
-    eqModule x
-      | Just x <- stripPrefix "." x, Just x <- stripSuffix "." x = (==) (BS.pack x)
-      | Just x <- stripPrefix "." x = BS.isPrefixOf $ BS.pack x
+    eqModule m
+      | Just p <- stripPrefix "." m, Just s <- stripSuffix "." p = (==) (BS.pack s)
+      | Just p <- stripPrefix "." m = BS.isPrefixOf $ BS.pack p
       | otherwise =
-          let y = BS.pack x; y2 = BS.pack ('.' : x)
+          let y = BS.pack m; y2 = BS.pack ('.' : m)
            in \v -> y `BS.isPrefixOf` v || y2 `BS.isInfixOf` v
 
     (packageNames, packageIds) = storeRead store Packages
@@ -171,20 +172,22 @@ filterTags ts qs = (map redo qs, exact, \i -> all ($ i) fs)
       | otherwise = QueryNone $ ['-' | not sense] ++ cat ++ ":" ++ val
     redo q = q
 
+filterTags2 :: StoreRead -> [Query] -> TargetId -> Bool
 filterTags2 ts qs = \i -> not (negq i) && (noPosRestrict || posq i)
   where
     (posq, negq) = both inRanges (pos, neg)
     (pos, neg) = both (concatMap snd) $ partition fst xs
     xs = catMaybes restrictions
-    noPosRestrict = all pred restrictions
+    noPosRestrict = all pred' restrictions
     restrictions = map getRestriction qs
-    pred Nothing = True
-    pred (Just (sense, _)) = not sense
+    pred' Nothing = True
+    pred' (Just (sense, _)) = not sense
     getRestriction :: Query -> Maybe (Bool, [(TargetId, TargetId)])
     getRestriction (QueryScope sense cat val) = do
       tag <- parseTag cat val
       ranges <- snd $ resolveTag ts tag
       pure (sense, ranges)
+    getRestriction _ = error "getRestriction: unexpected query"
 
 -- | Given a search which has no type or string in it, run the query on the tag bits.
 --   Using for things like IsModule, EqCategory etc.

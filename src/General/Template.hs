@@ -46,8 +46,8 @@ treeRemoveLam = transformM f
 
     parse x
       | Just (a, b) <- bstrSplitInfix (bstrPack "#{") x,
-        Just (b, c) <- bstrSplitInfix (bstrPack "}") b =
-          Lit a : Var b : parse c
+        Just (b', c) <- bstrSplitInfix (bstrPack "}") b =
+          Lit a : Var b' : parse c
     parse x = [Lit x]
 
 treeRemoveApp :: Tree -> Tree
@@ -62,8 +62,9 @@ treeOptimise = transform f . treeRemoveApp
   where
     fromList (List xs) = xs; fromList x = [x]
     toList [x] = x; toList xs = List xs
-    isLit (Lit x) = True; isLit _ = False
+    isLit (Lit _) = True; isLit _ = False
     fromLit (Lit x) = x
+    fromLit _ = error "fromLit: expected a Lit node"
 
     f = toList . g . concatMap fromList . fromList
 
@@ -100,9 +101,9 @@ treeCache t0 = unsafePerformIO $ do
     if old == new
       then pure t
       else do
-        t <- treeOptimise <$> treeRemoveLam t0
-        writeIORef ref (new, t)
-        pure t
+        t' <- treeOptimise <$> treeRemoveLam t0
+        writeIORef ref (new, t')
+        pure t'
 
 templateTree :: Tree -> Template
 templateTree t = Template t $ treeCache t
@@ -121,6 +122,6 @@ templateApply (Template t _) args = templateTree $ App t [(bstrPack a, b) | (a, 
 
 templateRender :: Template -> [(String, Template)] -> IO LBStr
 templateRender (Template _ t) args = do
-  t <- t
-  let Template t2 _ = templateApply (Template t $ pure t) args
+  t' <- t
+  let Template t2 _ = templateApply (Template t' $ pure t') args
   lbstrFromChunks . treeEval <$> treeRemoveLam t2

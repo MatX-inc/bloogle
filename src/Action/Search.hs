@@ -87,6 +87,7 @@ actionSearch Search {..} = replicateM_ repeat_ $ -- deliberately reopen the data
               [QueryType t] -> (pretty t, hseToSig t)
               _ -> error $ "Expected a type signature, got: " ++ x
         putStr $ unlines $ searchFingerprintsDebug store (parseType $ unwords query) (map parseType compare_)
+actionSearch _ = error "actionSearch: expected a Search command"
 
 -- | Returns the details printed out when hoogle --info is called
 targetInfo :: Bool -> [Query] -> Target -> String
@@ -121,7 +122,7 @@ unHTMLtargetItem :: Target -> Target
 unHTMLtargetItem target = target {targetItem = unHTML $ targetItem target}
 
 addCounter :: [String] -> [String]
-addCounter = zipWithFrom (\i x -> show i ++ ") " ++ x) 1
+addCounter = zipWithFrom (\i x -> show i ++ ") " ++ x) (1 :: Int)
 
 withSearch :: (NFData a) => FilePath -> (StoreRead -> IO a) -> IO a
 withSearch database act = do
@@ -134,16 +135,16 @@ withSearch database act = do
 
 search :: StoreRead -> [Query] -> ([Query], [Target])
 search store qs = runIdentity $ do
-  (qs, exact, filt, list) <- pure $ applyTags store qs
-  is <- case (filter isQueryName qs, filter isQueryType qs) of
-    ([], []) -> pure list
+  (qs', exact, filt, list') <- pure $ applyTags store qs
+  is <- case (filter isQueryName qs', filter isQueryType qs') of
+    ([], []) -> pure list'
     ([], t : _) -> pure $ searchTypes store $ hseToSig $ fromQueryType t
     (xs, []) -> pure $ searchNames store exact $ map fromQueryName xs
     (xs, t : _) -> do
       nam <- pure $ Set.fromList $ searchNames store exact $ map fromQueryName xs
       pure $ filter (`Set.member` nam) $ searchTypes store $ hseToSig $ fromQueryType t
   let look = lookupItem store
-  pure (qs, map look $ filter filt is)
+  pure (qs', map look $ filter filt is)
 
 action_search_test :: FilePath -> IO ()
 action_search_test database = testing "Action.Search.search" $ withSearch database $ \store -> do

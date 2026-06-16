@@ -63,21 +63,27 @@ parseQuery x = map QueryName nam ++ map QueryType (maybeToList typ) ++ scp
     (scp, rest) = scope_ $ lexer x
     (nam, typ) = divide rest
 
+openBrackets :: [[Char]]
 openBrackets = ["(#", "[:", "(", "["]
 
+shutBrackets :: [[Char]]
 shutBrackets = ["#)", ":]", ")", "]"]
 
+isBracket :: [Char] -> Bool
 isBracket x = x `elem` (openBrackets ++ shutBrackets)
 
+isBracketPair :: [Char] -> Bool
 isBracketPair x = x `elem` zipWith (++) openBrackets shutBrackets
 
+isSym :: Char -> Bool
 isSym x = ((isSymbol x || isPunctuation x) && x `notElem` special) || x `elem` ascSymbol
   where
     special = "(),;[]`{}\"'" :: String
     ascSymbol = "!#$%&*+./<=>?@\\^|-~" :: String
 
+isSyms :: [Char] -> Bool
 isSyms xs | isBracket xs || isBracketPair xs = False
-isSyms (x : xs) = isSym x
+isSyms (x : _xs) = isSym x
 isSyms [] = False
 
 -- | Split into small lexical chunks.
@@ -91,7 +97,7 @@ lexer x | Just s <- (bs !!) <$> findIndex (`isPrefixOf` x) bs = s : lexer (drop 
 lexer (x : xs)
   | isSpace x = " " : lexer (trimStart xs)
   | isAlpha x || x == '_' =
-      let (a, b) = span (\x -> isAlphaNum x || x `elem` ("_'#-" :: String)) xs
+      let (a, b) = span (\c -> isAlphaNum c || c `elem` ("_'#-" :: String)) xs
           (a1, a2) = spanEnd (== '-') a
        in (x : a1) : lexer (a2 ++ b)
   | isSym x = let (a, b) = span isSym xs in (x : a) : lexer b
@@ -109,21 +115,21 @@ lexer [] = []
 -- > +scope:foo -scope:foo scope:foo
 scope_ :: [String] -> ([Query], [String])
 scope_ xs = case xs of
-  (readPM -> Just pm) : (readCat -> Just cat) : ":" : (readMod -> Just (mod, rest)) -> add pm cat mod rest
-  (readPM -> Just pm) : (readCat -> Just cat) : ":-" : (readMod -> Just (mod, rest)) -> add False cat mod rest
-  (readPM -> Just pm) : (readMod -> Just (mod, rest)) -> add_ pm mod rest
-  (readCat -> Just cat) : ":" : (readMod -> Just (mod, rest)) -> add True cat mod rest
-  (readCat -> Just cat) : ":." : (readMod -> Just (mod, rest)) -> add True cat ('.' : mod) rest
-  (readCat -> Just cat) : ":-" : (readMod -> Just (mod, rest)) -> add False cat mod rest
-  (readCat -> Just cat) : ":-." : (readMod -> Just (mod, rest)) -> add False cat ('.' : mod) rest
+  (readPM -> Just pm) : (readCat -> Just cat) : ":" : (readMod -> Just (modl, rest)) -> add pm cat modl rest
+  (readPM -> Just _pm) : (readCat -> Just cat) : ":-" : (readMod -> Just (modl, rest)) -> add False cat modl rest
+  (readPM -> Just pm) : (readMod -> Just (modl, rest)) -> add_ pm modl rest
+  (readCat -> Just cat) : ":" : (readMod -> Just (modl, rest)) -> add True cat modl rest
+  (readCat -> Just cat) : ":." : (readMod -> Just (modl, rest)) -> add True cat ('.' : modl) rest
+  (readCat -> Just cat) : ":-" : (readMod -> Just (modl, rest)) -> add False cat modl rest
+  (readCat -> Just cat) : ":-." : (readMod -> Just (modl, rest)) -> add False cat ('.' : modl) rest
   "(" : (readDots -> Just (scp, x : ")" : rest)) -> out ["(", x, ")"] $ add_ True scp rest
   (readDots -> Just (scp, rest)) -> add_ True scp rest
   "(" : "." : (readDots -> Just (scp, x : ")" : rest)) -> out ["(", x, ")"] $ add_ True ('.' : scp) rest
   "." : (readDots -> Just (scp, rest)) -> add_ True ('.' : scp) rest
-  x : xs -> out [x] $ scope_ xs
+  x : xs' -> out [x] $ scope_ xs'
   [] -> ([], [])
   where
-    out xs (a, b) = (a, xs ++ b)
+    out xs' (a, b) = (a, xs' ++ b)
     add a b c rest = let (x, y) = scope_ rest in (QueryScope a b c : x, y)
     add_ a c rest = add a b c rest
       where
@@ -135,14 +141,14 @@ scope_ xs = case xs of
       | isAlpha1 x = Just x
       | otherwise = Nothing
 
-    readMod (x : xs) | isAlpha1 x = Just $ case xs of
+    readMod (x : xs') | isAlpha1 x = Just $ case xs' of
       "." : ys | Just (a, b) <- readMod ys -> (x ++ "." ++ a, b)
       "." : [] -> (x ++ ".", [])
       "." : " " : ys -> (x ++ ".", " " : ys)
-      _ -> (x, xs)
+      _ -> (x, xs')
     readMod _ = Nothing
 
-    readDots (x : xs) | isAlpha1 x = case xs of
+    readDots (x : xs') | isAlpha1 x = case xs' of
       "." : ys | Just (a, b) <- readDots ys -> Just (x ++ "." ++ a, b)
       ('.' : y) : ys -> Just (x, [y | y /= ""] ++ ys)
       _ -> Nothing
@@ -180,19 +186,19 @@ typeSig_ xs = case parseTypeWithMode parseMode $ unwords $ fixup $ filter (not .
     completeFunc (unsnoc -> Just (a, b)) | b `elem` ["->", "=>"] = a ++ [b, "_"]
     completeFunc x = x
 
-    closeBracket xs = xs ++ foldl f [] xs
+    closeBracket xs' = xs' ++ foldl f [] xs'
       where
         f stack x | Just c <- lookup x (zip openBrackets shutBrackets) = c : stack
         f (s : tack) x | x == s = tack
-        f stack x = stack
+        f stack _x = stack
 
     underscore = replace ["_"] ["__"]
 
 query_test :: IO ()
 query_test = testing "Query.parseQuery" $ do
-  let want s p (bad, q) = (["missing " ++ s | not $ any p q], filter (not . p) q)
+  let want s p (_bad, q) = (["missing " ++ s | not $ any p q], filter (not . p) q)
       wantEq v = want (show v) (== v)
-      name = wantEq . QueryName
+      qname = wantEq . QueryName
       scope b c v = wantEq $ QueryScope b c v
       typ = wantEq . QueryType . fmap (const ()) . fromParseResult . parseTypeWithMode parseMode
       typpp x = want ("type " ++ x) (\v -> case v of QueryType s -> pretty s == x; _ -> False)
@@ -204,29 +210,29 @@ query_test = testing "Query.parseQuery" $ do
           q = parseQuery a
 
   "" === id
-  "map" === name "map"
-  "#" === name "#"
-  "c#" === name "c#"
-  "-" === name "-"
-  "/" === name "/"
-  "->" === name "->"
-  "foldl'" === name "foldl'"
-  "fold'l" === name "fold'l"
-  "Int#" === name "Int#"
-  "concat map" === name "concat" . name "map"
+  "map" === qname "map"
+  "#" === qname "#"
+  "c#" === qname "c#"
+  "-" === qname "-"
+  "/" === qname "/"
+  "->" === qname "->"
+  "foldl'" === qname "foldl'"
+  "fold'l" === qname "fold'l"
+  "Int#" === qname "Int#"
+  "concat map" === qname "concat" . qname "map"
   "a -> b" === typ "a -> b"
   "a->b" === typ "a -> b"
   "(a b)" === typ "(a b)"
   "map :: a -> b" === typ "a -> b"
-  "+Data.Map map" === scope True "module" "Data.Map" . name "map"
+  "+Data.Map map" === scope True "module" "Data.Map" . qname "map"
   "a -> b package:foo" === scope True "package" "foo" . typ "a -> b"
   "a -> b package:foo-bar" === scope True "package" "foo-bar" . typ "a -> b"
-  "Data.Map.map" === scope True "module" "Data.Map" . name "map"
+  "Data.Map.map" === scope True "module" "Data.Map" . qname "map"
   "[a]" === typ "[a]"
-  "++" === name "++"
-  "(++)" === name "++"
-  ":+:" === name ":+:"
-  "bytestring-cvs +hackage" === scope True "package" "hackage" . name "bytestring-cvs"
+  "++" === qname "++"
+  "(++)" === qname "++"
+  ":+:" === qname ":+:"
+  "bytestring-cvs +hackage" === scope True "package" "hackage" . qname "bytestring-cvs"
   "m => c" === typ "m => c"
   "[b ()" === typ "[b ()]"
   "[b (" === typ "[b ()]"
@@ -234,30 +240,30 @@ query_test = testing "Query.parseQuery" $ do
   "(a -> b) ->" === typpp "(a -> b) -> _"
   "(a -> b) -" === typpp "(a -> b) -> _"
   "Monad m => " === typpp "Monad m => _"
-  "map is:exact" === name "map" . scope True "is" "exact"
-  "sort set:hackage" === name "sort" . scope True "set" "hackage"
-  "sort -set:hackage" === name "sort" . scope False "set" "hackage"
-  "sort set:-hackage" === name "sort" . scope False "set" "hackage"
-  "sort -set:-hackage" === name "sort" . scope False "set" "hackage"
+  "map is:exact" === qname "map" . scope True "is" "exact"
+  "sort set:hackage" === qname "sort" . scope True "set" "hackage"
+  "sort -set:hackage" === qname "sort" . scope False "set" "hackage"
+  "sort set:-hackage" === qname "sort" . scope False "set" "hackage"
+  "sort -set:-hackage" === qname "sort" . scope False "set" "hackage"
   "package:bytestring-csv" === scope True "package" "bytestring-csv"
-  "(>>=)" === name ">>="
-  "(>>=" === name ">>="
-  ">>=" === name ">>="
-  "Control.Monad.mplus" === name "mplus" . scope True "module" "Control.Monad"
-  "Control.Monad.>>=" === name ">>=" . scope True "module" "Control.Monad"
-  "Control.Monad.(>>=)" === name ">>=" . scope True "module" "Control.Monad"
-  "(Control.Monad.>>=)" === name ">>=" . scope True "module" "Control.Monad"
-  "Control.Monad.(>>=" === name ">>=" . scope True "module" "Control.Monad"
-  "(Control.Monad.>>=" === name ">>=" . scope True "module" "Control.Monad"
-  "foo.bar" === name "bar" . scope True "package" "foo"
-  "insert module:.Map" === name "insert" . scope True "module" ".Map"
-  "insert module:Map." === name "insert" . scope True "module" "Map."
-  "insert module:.Map." === name "insert" . scope True "module" ".Map."
-  ".Map.insert" === name "insert" . scope True "module" ".Map"
+  "(>>=)" === qname ">>="
+  "(>>=" === qname ">>="
+  ">>=" === qname ">>="
+  "Control.Monad.mplus" === qname "mplus" . scope True "module" "Control.Monad"
+  "Control.Monad.>>=" === qname ">>=" . scope True "module" "Control.Monad"
+  "Control.Monad.(>>=)" === qname ">>=" . scope True "module" "Control.Monad"
+  "(Control.Monad.>>=)" === qname ">>=" . scope True "module" "Control.Monad"
+  "Control.Monad.(>>=" === qname ">>=" . scope True "module" "Control.Monad"
+  "(Control.Monad.>>=" === qname ">>=" . scope True "module" "Control.Monad"
+  "foo.bar" === qname "bar" . scope True "package" "foo"
+  "insert module:.Map" === qname "insert" . scope True "module" ".Map"
+  "insert module:Map." === qname "insert" . scope True "module" "Map."
+  "insert module:.Map." === qname "insert" . scope True "module" ".Map."
+  ".Map.insert" === qname "insert" . scope True "module" ".Map"
   ".Map." === scope True "module" ".Map"
   --  FIXME: ".Map" === scope True "module" ".Map" -- probably should work, but really needs to rewrite a fair bit
-  "(.Monad.>>=" === name ">>=" . scope True "module" ".Monad"
+  "(.Monad.>>=" === qname ">>=" . scope True "module" ".Monad"
   --  FIXME: "author:Taylor-M.-Hedberg" === scope True "author" "Taylor-M.-Hedberg"
   "author:Bryan-O'Sullivan" === scope True "author" "Bryan-O'Sullivan"
-  "\8801" === name "\8801"
+  "\8801" === qname "\8801"
   "( )" === id -- FIXME: Should probably be ()

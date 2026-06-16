@@ -44,8 +44,8 @@ withTiming writeTimingsTo act = do
     -- Expecting unrecorded of ~2s
     -- Most of that comes from the pipeline - we get occasional 0.01 between items as one flushes
     -- Then at the end there is ~0.5 while the final item flushes
-    xs <- pure $ sortOn (negate . snd) $ ("Unrecorded", total - sum (map snd xs)) : xs
-    writeFile file $ unlines $ prettyTable 2 "Secs" xs
+    xs' <- pure $ sortOn (negate . snd) $ ("Unrecorded", total - sum (map snd xs)) : xs
+    writeFile file $ unlines $ prettyTable 2 "Secs" xs'
   putStrLn $ "Took " ++ showDuration total
   pure res
 
@@ -70,7 +70,7 @@ timedEx overwrite Timing {..} msg act = do
       else
         putStrLn ""
 
-  let out msg = liftIO $ putStr msg >> pure (length msg)
+  let out msg' = liftIO $ putStr msg' >> pure (length msg')
   undo1 <- out $ msg ++ "... "
   liftIO $ hFlush stdout
 

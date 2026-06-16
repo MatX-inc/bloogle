@@ -78,7 +78,7 @@ instance (Binary n) => Binary (Ctx n) where
 instance (Binary n) => Binary (Ty n) where
   put (TCon x y) = put (0 :: Word8) >> put x >> put y
   put (TVar x y) = put (1 :: Word8) >> put x >> put y
-  get = do i :: Word8 <- get; liftA2 (case i of 0 -> TCon; 1 -> TVar) get get
+  get = do i :: Word8 <- get; liftA2 (case i of 0 -> TCon; 1 -> TVar; _ -> error "Binary Ty: unexpected tag") get get
 
 prettySig :: Sig String -> String
 prettySig Sig {..} =
@@ -162,7 +162,7 @@ instance ToJSON Target where
       ]
     where
       maybeNamedURL m = maybe emptyObject namedURL m
-      namedURL (name, url) = object [("name", toJSON name), ("url", toJSON url)]
+      namedURL (name', url) = object [("name", toJSON name'), ("url", toJSON url)]
 
 instance FromJSON Target where
   parseJSON = withObject "Target" $ \o ->
@@ -201,11 +201,11 @@ instance Arbitrary Target where
           ]
 
 targetExpandURL :: Target -> Target
-targetExpandURL t@Target {..} = t {targetURL = url, targetModule = second (const mod) <$> targetModule}
+targetExpandURL t@Target {..} = t {targetURL = url, targetModule = second (const mod') <$> targetModule}
   where
     pkg = maybe "" snd targetPackage
-    mod = maybe pkg (plus pkg . snd) targetModule
-    url = plus mod targetURL
+    mod' = maybe pkg (plus pkg . snd) targetModule
+    url = plus mod' targetURL
 
     plus a b
       | b == "" = ""
@@ -217,44 +217,47 @@ unHTMLTarget t@Target {..} = t {targetItem = unHTML targetItem, targetDocs = unH
 
 splitIPackage :: [(a, Item)] -> [(PkgName, [(a, Item)])]
 splitIPackage = splitUsing (mkPackageName "") $ \x -> case snd x of
-  IPackage x -> Just x
+  IPackage x' -> Just x'
   _ -> Nothing
 
 splitIModule :: [(a, Item)] -> [(Str, [(a, Item)])]
 splitIModule = splitUsing mempty $ \x -> case snd x of
-  IModule x -> Just x
+  IModule x' -> Just x'
   _ -> Nothing
 
 splitUsing :: b -> (a -> Maybe b) -> [a] -> [(b, [a])]
-splitUsing def f = repeatedly $ \(x : xs) ->
-  let (a, b) = break (isJust . f) xs
-   in ((fromMaybe def $ f x, x : a), b)
+splitUsing def f = repeatedly go
+  where
+    go (x : xs) =
+      let (a, b) = break (isJust . f) xs
+       in ((fromMaybe def $ f x, x : a), b)
+    go [] = error "splitUsing: empty list"
 
 item_test :: IO ()
 item_test = testing "Input.Item.Target JSON (encode . decode = id) " $ do
   quickCheck $ \(t :: Target) -> case J.eitherDecode $ J.encode t of
-    (Left e) -> False
+    (Left _e) -> False
     (Right t') -> t == t'
 
 highlightItem :: (Monoid m) => (String -> m) -> (String -> m) -> (String -> m) -> (String -> m) -> [Query] -> String -> m
 highlightItem plain safe dull bold qs x
-  | Just (pre, x) <- stripInfix "<s0>" x,
-    Just (name, post) <- stripInfix "</s0>" x =
-      safe pre <> highlight (unescapeHTML name) <> safe post
+  | Just (pre, x') <- stripInfix "<s0>" x,
+    Just (name', post) <- stripInfix "</s0>" x' =
+      safe pre <> highlight (unescapeHTML name') <> safe post
   | otherwise = plain x
   where
-    highlight x =
-      mconcatMap (\xs@((b, _) : _) -> let s = map snd xs in if b then bold s else dull s) $
+    highlight x' =
+      mconcatMap (\ys -> case ys of xs@((b, _) : _) -> let s = map snd xs in if b then bold s else dull s; [] -> mempty) $
         groupOn fst $
-          zip (findQueries x) x
+          zip (findQueries x') x'
       where
         -- generates a bool mask, which is only true for charachters that compose given queries
         -- e.g. [ "query" "ya" ] -> [ "AqUeRyAA" ] -> 01111110
         findQueries :: String -> [Bool]
-        findQueries (x : xs) | m > 0 = replicate m True ++ drop (m - 1) (findQueries xs)
+        findQueries (x'' : xs) | m > 0 = replicate m True ++ drop (m - 1) (findQueries xs)
           where
-            m = maximum $ 0 : [length y | QueryName y <- qs, lower y `isPrefixOf` lower (x : xs)]
-        findQueries (x : xs) = False : findQueries xs
+            m = maximum $ 0 : [length y | QueryName y <- qs, lower y `isPrefixOf` lower (x'' : xs)]
+        findQueries (_ : xs) = False : findQueries xs
         findQueries [] = []
 
 ---------------------------------------------------------------------
@@ -295,7 +298,7 @@ hseToSig = tyForall
     ctx _ = []
 
     ctxTy (TyInfix an a (UnpromotedName _ con) b) = ctxTy $ TyApp an (TyApp an (TyCon an con) a) b
-    ctxTy (fromTyApps -> TyCon _ con : TyVar _ var : _) = [Ctx (fromQName con) (fromName var)]
+    ctxTy (fromTyApps -> TyCon _ con : TyVar _ var' : _) = [Ctx (fromQName con) (fromName var')]
     ctxTy _ = []
 
     fromTyApps (TyApp _ x y) = fromTyApps x ++ [y]
@@ -303,6 +306,6 @@ hseToSig = tyForall
 
 hseToItem :: Decl a -> [Item]
 hseToItem (TypeSig _ names ty) = ISignature (toIString . strPack <$> hseToSig ty) : map (IName . strPack . fromName) names
-hseToItem (TypeDecl _ (fromDeclHead -> (name, bind)) rhs) = [IAlias (strPack $ fromName name) (map (toIString . strPack . fromName . fromTyVarBind) bind) (toIString . strPack <$> hseToSig rhs)]
-hseToItem (InstDecl an _ (fromIParen -> IRule _ _ ctx (fromInstHead -> (name, args))) _) = [IInstance $ fmap (toIString . strPack) $ hseToSig $ TyForall an Nothing ctx $ applyType (TyCon an name) args]
+hseToItem (TypeDecl _ (fromDeclHead -> (name', bind)) rhs) = [IAlias (strPack $ fromName name') (map (toIString . strPack . fromName . fromTyVarBind) bind) (toIString . strPack <$> hseToSig rhs)]
+hseToItem (InstDecl an _ (fromIParen -> IRule _ _ ctx (fromInstHead -> (name', args))) _) = [IInstance $ fmap (toIString . strPack) $ hseToSig $ TyForall an Nothing ctx $ applyType (TyCon an name') args]
 hseToItem x = map (IName . strPack) $ declNames x

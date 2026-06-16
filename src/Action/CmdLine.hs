@@ -69,30 +69,31 @@ data CmdLine
   deriving (Data, Typeable, Show)
 
 getCmdLine :: [String] -> IO CmdLine
-getCmdLine args = do
-  args <- withArgs args $ cmdArgsRun cmdLineMode
+getCmdLine argv = do
+  args1 <- withArgs argv $ cmdArgsRun cmdLineMode
 
   -- a database must be specified explicitly; there is no default location
   -- (`test` is exempt: it builds its own throwaway sample database)
-  args <- case args of
-    Test {} -> pure args
+  args2 <- case args1 of
+    Test {} -> pure args1
     _
-      | null (database args) ->
+      | null (database args1) ->
           errorIO "No database specified: pass --database FILE (build one with 'hoogle generate --local=DIR --database=FILE')"
-      | otherwise -> pure args
+      | otherwise -> pure args1
 
   -- fix up people using Hoogle 4 instructions
-  args <- case args of
+  args3 <- case args2 of
     Generate {..} | "all" `elem` include -> do
       putStrLn "Warning: 'all' argument is no longer required, and has been ignored."
-      pure $ args {include = delete "all" include}
-    _ -> pure args
+      pure $ args2 {include = delete "all" include}
+    _ -> pure args2
 
-  pure args
+  pure args3
 
 defaultGenerate :: CmdLine
 defaultGenerate = generate
 
+cmdLineMode :: Mode (CmdArgs CmdLine)
 cmdLineMode =
   cmdArgsMode $
     modes [search_ &= auto, generate, server, replay, test]
@@ -100,6 +101,7 @@ cmdLineMode =
       &= program "hoogle"
       &= summary ("Bloogle " ++ showVersion version ++ ", https://bloogle.bluespec.dev/")
 
+search_ :: CmdLine
 search_ =
   Search
     { color = def &= name "colour" &= help "Use colored output (requires ANSI terminal)",
@@ -116,6 +118,7 @@ search_ =
     }
     &= help "Perform a search"
 
+generate :: CmdLine
 generate =
   Generate
     { include = def &= args &= typ "PACKAGE",
@@ -126,6 +129,7 @@ generate =
     }
     &= help "Generate Bloogle databases"
 
+server :: CmdLine
 server =
   Server
     { port = 8080 &= typ "INT" &= help "Port number",
@@ -144,12 +148,14 @@ server =
     }
     &= help "Start a Bloogle server"
 
+replay :: CmdLine
 replay =
   Replay
     { logs = "log.txt" &= args &= typ "FILE"
     }
     &= help "Replay a log file"
 
+test :: CmdLine
 test =
   Test
     { disable_network_tests = False &= help "Disables the use of network tests"

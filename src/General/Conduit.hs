@@ -24,10 +24,15 @@ import General.Str
 import Prelude
 
 
+mapC :: Monad m => (a -> b) -> ConduitT a b m ()
 mapC = C.map
+mapMC :: Monad m => (a -> m b) -> ConduitT a b m ()
 mapMC = C.mapM
+mapAccumC :: Monad m => (t1 -> t2 -> (t1, b)) -> t1 -> ConduitT t2 b m t1
 mapAccumC f = C.mapAccum (\x a -> a `seq` f a x)
+mapAccumMC :: Monad m => (t1 -> t2 -> m (t1, b)) -> t1 -> ConduitT t2 b m t1
 mapAccumMC f = C.mapAccumM (\x a -> a `seq` f a x)
+filterC :: Monad m => (a -> Bool) -> ConduitT a a m ()
 filterC = C.filter
 
 zipFromC :: (Monad m, Enum i) => i -> ConduitM a (i, a) m ()
@@ -44,7 +49,7 @@ sinkList = consume
 groupOnLastC :: (Monad m, Eq b) => (a -> b) -> ConduitM a a m ()
 groupOnLastC op = do
     x <- await
-    whenJust x $ \x -> f (op x) x
+    whenJust x $ \x' -> f (op x') x'
     where
         f k v = await >>= \x -> case x of
             Nothing -> yield v
@@ -55,7 +60,7 @@ groupOnLastC op = do
 
 linesCR :: Monad m => ConduitM BStr BStr m ()
 linesCR = C.lines .| mapC f
-    where f x | Just (x, '\r') <- BS.unsnoc x = x
+    where f x | Just (x', '\r') <- BS.unsnoc x = x'
               | otherwise = x
 
 sourceLStr :: Monad m => LBStr -> ConduitM i BStr m ()
@@ -68,7 +73,7 @@ pipelineC buffer sink = do
     chan <- liftIO newChan          -- the items in flow (type o)
     bar <- liftIO newBarrier        -- the result type (type r)
     me <- liftIO myThreadId
-    liftIO $ flip forkFinally (either (throwTo me) (signalBarrier bar)) $ do
+    _ <- liftIO $ flip forkFinally (either (throwTo me) (signalBarrier bar)) $ do
         runConduit $
             (whileM $ do
                 x <- liftIO $ readChan chan

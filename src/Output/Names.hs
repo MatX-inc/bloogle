@@ -58,10 +58,11 @@ searchNames store exact (filter (/= "") . map trim -> xs) = unsafePerformIO $ do
       bracket (mallocArray $ storeRead store NamesSize) free $ \result ->
         BS.unsafeUseAsCString (storeRead store NamesText) $ \haystack ->
           withs (map (BS.unsafeUseAsCString . tweak) xs) $ \needles ->
-            withArray0 nullPtr needles $ \needles -> do
-              found <- c_text_search haystack needles (if exact then 1 else 0) result
-              xs <- peekArray (fromIntegral found) result
-              pure $ map ((vs V.!) . fromIntegral) xs
+            withArray0 nullPtr needles $ \needles' -> do
+              found <- c_text_search haystack needles' (if exact then 1 else 0) result
+              xs' <- peekArray (fromIntegral found) result
+              pure $ map ((vs V.!) . fromIntegral) xs'
 
 {-# NOINLINE c_text_search #-} -- for profiling
+c_text_search :: CString -> Ptr CString -> CInt -> Ptr CInt -> IO CInt
 c_text_search a b c d = text_search a b c d

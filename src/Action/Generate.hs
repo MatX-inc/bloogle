@@ -86,7 +86,7 @@ generate output metadata = ...
 -- filter -- search all
 
 readHaskellDirs :: Timing -> [FilePath] -> IO (Map.Map PkgName Package, Set.Set PkgName, ConduitT () (PkgName, URL, LBStr) IO ())
-readHaskellDirs timing dirs = do
+readHaskellDirs _timing dirs = do
   files <- concatMapM listFilesRecursive dirs
   -- We reverse/sort the list because of #206
   -- Two identical package names with different versions might be foo-2.0 and foo-1.0
@@ -128,11 +128,11 @@ readHaskellGhcpkg timing = do
           let file = docs </> unPackageName name <.> "txt"
           whenM (liftIO $ doesFileExist file) $ do
             src <- liftIO $ bstrReadFile file
-            docs <- liftIO $ canonicalizePath docs
+            docs' <- liftIO $ canonicalizePath docs
             let url =
                   "file://"
-                    ++ ['/' | not $ all isPathSeparator $ take 1 docs]
-                    ++ replace "\\" "/" (addTrailingPathSeparator docs)
+                    ++ ['/' | not $ all isPathSeparator $ take 1 docs']
+                    ++ replace "\\" "/" (addTrailingPathSeparator docs')
             yield (name, url, lbstrFromChunks [src])
   pure (cbl, Map.keysSet cbl, source)
 
@@ -175,7 +175,7 @@ readHaskellHaddock timing docBaseDir = do
     docDir name Package {..} = name ++ "-" ++ strUnpack packageVersion
 
 actionGenerate :: CmdLine -> IO ()
-actionGenerate g@Generate {..} = withTiming (if debug then Just $ replaceExtension database "timing" else Nothing) $ \timing -> do
+actionGenerate _g@Generate {..} = withTiming (if debug then Just $ replaceExtension database "timing" else Nothing) $ \timing -> do
   putStrLn "Starting generate"
   createDirectoryIfMissing True $ takeDirectory database
   whenLoud $ putStrLn $ "Generating files to " ++ takeDirectory database
@@ -192,31 +192,31 @@ actionGenerate g@Generate {..} = withTiming (if debug then Just $ replaceExtensi
       | [] <- local_ -> errorIO "Nothing to index: pass --local DIR (a directory of Bloogle .txt files) or --haddock DIR. (Generating from Hackage/Stackage online is no longer supported.)"
       | otherwise -> readHaskellDirs timing local_
   (cblErrs, popularity) <- evaluate $ packagePopularity cbl
-  cbl <- evaluate $ Map.map (\p -> p {packageDepends = []}) cbl -- clear the memory, since the information is no longer used
-  evaluate popularity
+  cbl' <- evaluate $ Map.map (\p -> p {packageDepends = []}) cbl -- clear the memory, since the information is no longer used
+  _ <- evaluate popularity
 
-  want <- pure $ if include /= [] then Set.fromList $ map mkPackageName include else want
-  want <- pure $ case count of Nothing -> want; Just count -> Set.fromList $ take count $ Set.toList want
+  want' <- pure $ if include /= [] then Set.fromList $ map mkPackageName include else want
+  want'' <- pure $ case count of Nothing -> want'; Just count' -> Set.fromList $ take count' $ Set.toList want'
 
   (stats, _) <- storeWriteFile database $ \store -> do
     xs <- withBinaryFile (database `replaceExtension` "warn") WriteMode $ \warnings -> do
       hSetEncoding warnings utf8
       hPutStr warnings $ unlines cblErrs
-      nCblErrs <- evaluate $ length cblErrs
+      _nCblErrs <- evaluate $ length cblErrs
 
-      itemWarn <- newIORef 0
+      itemWarn <- newIORef (0 :: Integer)
       let warning msg = do modifyIORef itemWarn succ; hPutStrLn warnings msg
 
       let consume :: ConduitM (Int, (PkgName, URL, LBStr)) (Maybe Target, [Item]) IO ()
           consume = awaitForever $ \(i, (unPackageName -> pkg, url, body)) -> do
-            timedOverwrite timing ("[" ++ show i ++ "/" ++ show (Set.size want) ++ "] " ++ pkg) $
+            timedOverwrite timing ("[" ++ show i ++ "/" ++ show (Set.size want'') ++ "] " ++ pkg) $
               parseHoogle (\msg -> warning $ pkg ++ ":" ++ msg) url body
 
       writeItems store $ \items -> do
         xs <-
           runConduit $
             source
-              .| filterC (flip Set.member want . fst3)
+              .| filterC (flip Set.member want'' . fst3)
               .| void
                 ( (|$|)
                     (zipFromC 1 .| consume)
@@ -224,8 +224,8 @@ actionGenerate g@Generate {..} = withTiming (if debug then Just $ replaceExtensi
                         seen <- fmap Set.fromList $ mapMC (evaluate . force . fst3) .| sinkList
                         let missing =
                               [ x
-                              | x <- Set.toList $ want `Set.difference` seen,
-                                fmap packageLibrary (Map.lookup x cbl) /= Just False
+                              | x <- Set.toList $ want'' `Set.difference` seen,
+                                fmap packageLibrary (Map.lookup x cbl') /= Just False
                               ]
                         liftIO $ putStrLn ""
                         liftIO $ whenNormal $ when (missing /= []) $ do
@@ -234,9 +234,9 @@ actionGenerate g@Generate {..} = withTiming (if debug then Just $ replaceExtensi
                           when (Set.null seen) $
                             exitFail "No packages were found, aborting (pass --local DIR or --haddock DIR)"
                         -- synthesise things for Cabal packages that are not documented
-                        forM_ (Map.toList cbl) $ \(name, Package {..}) -> when (name `Set.notMember` seen) $ do
+                        forM_ (Map.toList cbl') $ \(name, Package {..}) -> when (name `Set.notMember` seen) $ do
                           let ret prefix = yield $ fakePackage name $ prefix ++ trim (strUnpack packageSynopsis)
-                          if name `Set.member` want
+                          if name `Set.member` want''
                             then
                               ( if packageLibrary
                                   then ret "Documentation not found, so not searched.\n"
@@ -252,25 +252,26 @@ actionGenerate g@Generate {..} = withTiming (if debug then Just $ replaceExtensi
                 )
               .| pipelineC 10 (items .| sinkList)
 
-        itemWarn <- readIORef itemWarn
-        when (itemWarn > 0) $
+        itemWarn' <- readIORef itemWarn
+        when (itemWarn' > 0) $
           putStrLn $
-            "Found " ++ show itemWarn ++ " warnings when processing items"
+            "Found " ++ show itemWarn' ++ " warnings when processing items"
         pure [(a, b) | (a, bs) <- xs, b <- bs]
 
     itemsMemory <- getStatsCurrentLiveBytes
-    xs <- timed timing "Reordering items" $ pure $! reorderItems (\s -> maybe 1 negate $ Map.lookup s popularity) xs
-    timed timing "Writing tags" $ writeTags store (`Set.member` want) (\x -> maybe [] (map (both strUnpack) . packageTags) $ Map.lookup x cbl) xs
-    timed timing "Writing names" $ writeNames store xs
-    timed timing "Writing types" $ writeTypes store (if debug then Just $ dropExtension database else Nothing) xs
+    xs' <- timed timing "Reordering items" $ pure $! reorderItems (\s -> maybe 1 negate $ Map.lookup s popularity) xs
+    timed timing "Writing tags" $ writeTags store (`Set.member` want'') (\x -> maybe [] (map (both strUnpack) . packageTags) $ Map.lookup x cbl') xs'
+    timed timing "Writing names" $ writeNames store xs'
+    timed timing "Writing types" $ writeTypes store (if debug then Just $ dropExtension database else Nothing) xs'
 
     x <- getVerbosity
     when (x >= Loud) $
       whenJustM getStatsDebug print
     when (x >= Normal) $ do
-      whenJustM getStatsPeakAllocBytes $ \x ->
-        putStrLn $ "Peak of " ++ x ++ ", " ++ fromMaybe "unknown" itemsMemory ++ " for items"
+      whenJustM getStatsPeakAllocBytes $ \x' ->
+        putStrLn $ "Peak of " ++ x' ++ ", " ++ fromMaybe "unknown" itemsMemory ++ " for items"
 
   when debug $
     writeFile (database `replaceExtension` "store") $
       unlines stats
+actionGenerate _ = error "actionGenerate: expected Generate"

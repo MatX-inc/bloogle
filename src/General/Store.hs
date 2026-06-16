@@ -59,6 +59,7 @@ import Prelude
 
 -- Ensure the string is always 25 chars long, so version numbers don't change its size
 -- Only use the first two components of the version number to identify the database
+verString :: BS.ByteString
 verString = BS.pack $ take 25 $ "HOOGLE-" ++ showVersion (trimVersion 3 version) ++ repeat ' '
 
 ---------------------------------------------------------------------
@@ -109,8 +110,8 @@ instance forall a. (Typeable a, Storable a) => Stored (V.Vector a) where
   storedWrite store k part v = V.unsafeWith v $ \ptr ->
     storeWriteAtom store k part (castPtr ptr, V.length v * sizeOf (undefined :: a))
   storedRead store k = storeReadAtom store k $ \(ptr, len) -> do
-    ptr <- newForeignPtr_ $ castPtr ptr
-    pure $ V.unsafeFromForeignPtr0 ptr (len `div` sizeOf (undefined :: a))
+    ptr' <- newForeignPtr_ $ castPtr ptr
+    pure $ V.unsafeFromForeignPtr0 ptr' (len `div` sizeOf (undefined :: a))
 
 ---------------------------------------------------------------------
 -- WRITE OUT
@@ -125,8 +126,8 @@ newtype StoreWrite = StoreWrite (IORef SW)
 
 storeWriteFile :: FilePath -> (StoreWrite -> IO a) -> IO ([String], a)
 storeWriteFile file act = do
-  atoms <- newIORef Map.empty
-  parts <- newIORef Nothing
+  _atoms <- newIORef Map.empty
+  _parts <- newIORef Nothing
   withTempFile (takeDirectory file) (takeFileName file) $ \tmpFile h -> do
     -- put the version string at the start and end, so we can tell truncation vs wrong version
     BS.hPut h verString
@@ -162,6 +163,7 @@ storeWritePart :: forall t a. (Typeable (t a), Typeable a, Stored a) => StoreWri
 storeWritePart store k = storedWrite store k True
 
 {-# NOINLINE putBuffer #-}
+putBuffer :: Handle -> Ptr a -> Int -> IO ()
 putBuffer a b c = hPutBuf a b c
 
 storeWriteAtom :: forall t a. (Typeable (t a), Typeable a) => StoreWrite -> t a -> Bool -> CStringLen -> IO ()
@@ -175,7 +177,7 @@ storeWriteAtom (StoreWrite ref) (show . typeOf -> key) part (ptr, len) = do
       | part,
         key == keyOld -> do
           let size = atomSize a + len
-          evaluate size
+          _ <- evaluate size
           pure $ (key, a {atomSize = size}) : xs
     _ -> pure $ (key, Atom val swPosition len) : swAtoms
   writeIORef' ref sw {swPosition = swPosition + len, swAtoms = atoms}
@@ -246,6 +248,7 @@ newtype Snd k v where Snd :: k -> Snd k b deriving (Typeable)
 
 instance (Typeable a, Typeable b, Stored a, Stored b) => Stored (a, b) where
   storedWrite store k False (a, b) = storeWrite store (Fst k) a >> storeWrite store (Snd k) b
+  storedWrite _ _ True _ = error "storedWrite: writing a pair in parts is not supported"
   storedRead store k = (storeRead store $ Fst k, storeRead store $ Snd k)
 
 ---------------------------------------------------------------------
@@ -255,6 +258,7 @@ data StoredInt k v where StoredInt :: k -> StoredInt k BS.ByteString deriving (T
 
 instance Stored Int where
   storedWrite store k False v = storeWrite store (StoredInt k) $ intToBS v
+  storedWrite _ _ True _ = error "storedWrite: writing an Int in parts is not supported"
   storedRead store k = intFromBS $ storeRead store (StoredInt k)
 
 ---------------------------------------------------------------------
@@ -278,4 +282,5 @@ jaggedAsk (Jagged is vs) i = V.slice start (end - start) vs
 
 instance (Typeable a, Storable a) => Stored (Jagged a) where
   storedWrite store k False (Jagged is vs) = storeWrite store (JaggedStore k) (is, vs)
+  storedWrite _ _ True _ = error "storedWrite: writing a Jagged in parts is not supported"
   storedRead store k = uncurry Jagged $ storeRead store $ JaggedStore k

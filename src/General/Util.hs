@@ -131,6 +131,7 @@ applyType x [] = x
 applyFun1 :: [Type a] -> Type a
 applyFun1 [x] = x
 applyFun1 (x:xs) = TyFun (ann x) x $ applyFun1 xs
+applyFun1 [] = error "applyFun1: empty list"
 
 unapplyFun :: Type a -> [Type a]
 unapplyFun (TyFun _ x y) = x : unapplyFun y
@@ -151,6 +152,7 @@ fromQName (Special _ (TupleCon _ box n)) = "(" ++ h ++ replicate n ',' ++ h ++ "
     where h = ['#' | box == Unboxed]
 fromQName (Special _ UnboxedSingleCon{}) = "(##)"
 fromQName (Special _ Cons{}) = ":"
+fromQName (Special _ ExprHole{}) = error "fromQName: unexpected ExprHole"
 
 fromContext :: Context a -> [Asst a]
 fromContext (CxSingle _ x) = [x]
@@ -188,7 +190,7 @@ declNames x = map fromName $ case x of
     TypeSig _ names _ -> names
     PatSynSig _ names _ _ _ _ _ -> names
     _ -> []
-    where f x = [fst $ fromDeclHead x]
+    where f x' = [fst $ fromDeclHead x']
 
 
 isTypeSig :: Decl a -> Bool
@@ -208,10 +210,12 @@ unHTML = unescapeHTML . innerTextHTML
 escapeURL :: String -> String
 escapeURL = UTF8.toString . URI.urlEncode True . UTF8.fromString
 
-isUpper1 (x:xs) = isUpper x
+isUpper1 :: [Char] -> Bool
+isUpper1 (x:_xs) = isUpper x
 isUpper1 _ = False
 
-isAlpha1 (x:xs) = isAlpha x
+isAlpha1 :: [Char] -> Bool
+isAlpha1 (x:_xs) = isAlpha x
 isAlpha1 [] = False
 
 splitPair :: String -> String -> (String, String)
@@ -222,8 +226,8 @@ joinPair :: [a] -> ([a], [a]) -> [a]
 joinPair sep (a,b) = a ++ sep ++ b
 
 testing_, testing :: String -> IO () -> IO ()
-testing_ name act = do putStr $ "Test " ++ name ++ " "; act
-testing name act = do testing_ name act; putStrLn ""
+testing_ name' act = do putStr $ "Test " ++ name' ++ " "; act
+testing name' act = do testing_ name' act; putStrLn ""
 
 testEq :: (Show a, Eq a) => a -> a -> IO ()
 testEq a b | a == b = putStr "."
@@ -279,17 +283,18 @@ data TakeSort k v = More !Int !(Map.Map k [v])
 
 -- | @takeSortOn n op == take n . sortOn op@
 takeSortOn :: Ord k => (a -> k) -> Int -> [a] -> [a]
-takeSortOn op n xs
+takeSortOn op' n xs
     | n <= 0 = []
     | otherwise = concatMap reverse $ Map.elems $ getMap $ foldl' add (More n Map.empty) xs
     where
         getMap (More _ mp) = mp
         getMap (Full _ mp) = mp
 
-        add (More n mp) x = (if n <= 1 then full else More (n-1)) $ Map.insertWith (++) (op x) [x] mp
-        add o@(Full mx mp) x = let k = op x in if k >= mx then o else full $ Map.insertWith (++) k [x] $ delMax mp
+        add (More n' mp) x = (if n' <= 1 then full else More (n'-1)) $ Map.insertWith (++) (op' x) [x] mp
+        add o@(Full mx mp) x = let k = op' x in if k >= mx then o else full $ Map.insertWith (++) k [x] $ delMax mp
         full mp = Full (fst $ Map.findMax mp) mp
-        delMax mp | Just ((k,_:vs), mp) <- Map.maxViewWithKey mp = if null vs then mp else Map.insert k vs mp
+        delMax mp | Just ((k,_:vs), mp') <- Map.maxViewWithKey mp = if null vs then mp' else Map.insert k vs mp'
+        delMax mp = mp
 
 
 
@@ -319,8 +324,8 @@ ghcModuleURL x = replace "." "-" (strUnpack x) ++ ".html"
 hackageDeclURL :: Bool -> String -> URL
 hackageDeclURL typesig x = "#" ++ (if typesig then "v" else "t") ++ ":" ++ concatMap f x
     where
-        f x | isLegal x = [x]
-            | otherwise = "-" ++ show (ord x) ++ "-"
+        f x' | isLegal x' = [x']
+             | otherwise = "-" ++ show (ord x') ++ "-"
         -- isLegal is from haddock-api:Haddock.Utils; we need to use
         -- the same escaping strategy here in order for fragment links
         -- to work
@@ -331,14 +336,14 @@ hackageDeclURL typesig x = "#" ++ (if typesig then "v" else "t") ++ ":" ++ conca
 
 
 trimVersion :: Int -> Version -> Version
-trimVersion i v = v{versionBranch = take 3 $ versionBranch v}
+trimVersion _i v = v{versionBranch = take 3 $ versionBranch v}
 
 parseTrailingVersion :: String -> (String, [Int])
 parseTrailingVersion = (reverse *** reverse) . f . reverse
     where
-        f xs | (ver@(_:_),sep:xs) <- span isDigit xs
+        f xs | (ver@(_:_),sep:xs') <- span isDigit xs
              , sep == '-' || sep == '.'
-             , (a, b) <- f xs
+             , (a, b) <- f xs'
              = (a, Prelude.read (reverse ver) : b)
         f xs = (xs, [])
 
@@ -349,24 +354,24 @@ inRanges xs = \x -> maybe False (`inRange` x) $ Map.lookupLE x mp
     where
         mp = foldl' add Map.empty xs
 
-        merge (l1,u1) (l2,u2) = (min l1 l2, max u1 u2)
+        merge' (l1,u1) (l2,u2) = (min l1 l2, max u1 u2)
         overlap x1 x2 = x1 `inRange` fst x2 || x2 `inRange` fst x1
-        add mp x
-            | Just x2 <- Map.lookupLE (fst x) mp, overlap x x2 = add (Map.delete (fst x2) mp) (merge x x2)
-            | Just x2 <- Map.lookupGE (fst x) mp, overlap x x2 = add (Map.delete (fst x2) mp) (merge x x2)
-            | otherwise = uncurry Map.insert x mp
+        add mp' x
+            | Just x2 <- Map.lookupLE (fst x) mp', overlap x x2 = add (Map.delete (fst x2) mp') (merge' x x2)
+            | Just x2 <- Map.lookupGE (fst x) mp', overlap x x2 = add (Map.delete (fst x2) mp') (merge' x x2)
+            | otherwise = uncurry Map.insert x mp'
 
 
 general_util_test :: IO ()
 general_util_test = do
     testing "General.Util.splitPair" $ do
-        let a === b = if a == b then putChar '.' else errorIO $ show (a,b)
-        splitPair ":" "module:foo:bar" === ("module","foo:bar")
-        do x <- try_ $ evaluate $ rnf $ splitPair "-" "module:foo"; isLeft x === True
-        splitPair "-" "module-" === ("module","")
+        let a ==== b = if a == b then putChar '.' else errorIO $ show (a,b)
+        splitPair ":" "module:foo:bar" ==== ("module","foo:bar")
+        do x <- try_ $ evaluate $ rnf $ splitPair "-" "module:foo"; isLeft x ==== True
+        splitPair "-" "module-" ==== ("module","")
     testing_ "General.Util.inRanges" $ do
         quickCheck $ \(x :: Int8) xs -> inRanges xs x == any (`inRange` x) xs
     testing "General.Util.parseTrailingVersion" $ do
-        let a === b = if a == b then putChar '.' else errorIO $ show (a,b)
-        parseTrailingVersion "shake-0.15.2" === ("shake",[0,15,2])
-        parseTrailingVersion "test-of-stuff1" === ("test-of-stuff1",[])
+        let a ==== b = if a == b then putChar '.' else errorIO $ show (a,b)
+        parseTrailingVersion "shake-0.15.2" ==== ("shake",[0,15,2])
+        parseTrailingVersion "test-of-stuff1" ==== ("test-of-stuff1",[])

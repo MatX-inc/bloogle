@@ -32,3 +32,4 @@ actionTest Test {..} = withBuffering stdout NoBuffering $ withTempFile $ \sample
   action_search_test sample
   unless disable_network_tests $ action_server_test sample
   putStrLn ""
+actionTest _ = error "actionTest: expected a Test command"

@@ -152,11 +152,11 @@ parseLogLine _ _ = Nothing
 -- Hoogle used to store whole numbers of milliseconds, then it switched to 4dp doubles with a guaranteed '.'
 parseDuration :: BS.ByteString -> Double
 parseDuration x
-  | Just (whole, x) <- BS.readInt x =
-      case BS.uncons x of
-        Just ('.', x)
-          | Just (frac, y) <- BS.readInt x ->
-              intToDouble whole + (intToDouble frac / (10 ^ (BS.length x - BS.length y)))
+  | Just (whole, x1) <- BS.readInt x =
+      case BS.uncons x1 of
+        Just ('.', x2)
+          | Just (frac, y) <- BS.readInt x2 ->
+              intToDouble whole + (intToDouble frac / (10 ^ (BS.length x2 - BS.length y)))
           | otherwise -> 0
         _ -> intToDouble whole / 1000
 parseDuration _ = 0

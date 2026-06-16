@@ -56,35 +56,37 @@ actionServer cmd@Server {..} = do
   putStrLn $ "Server started on port " ++ show port
   putStr "Reading log..." >> hFlush stdout
   time <- offsetTime
-  log <- logCreate (if logs == "" then Left stdout else Right logs) $
+  log' <- logCreate (if logs == "" then Left stdout else Right logs) $
     \x -> BS.pack "bloogle=" `BS.isInfixOf` x && not (BS.pack "is:ping" `BS.isInfixOf` x)
   putStrLn . showDuration =<< time
-  evaluate spawned
+  _ <- evaluate spawned
   dataDir <- maybe getDataDir pure datadir
-  haddock <- maybe (pure Nothing) (fmap Just . canonicalizePath) haddock
+  haddock' <- maybe (pure Nothing) (fmap Just . canonicalizePath) haddock
   withSearch database $ \store ->
-    server log cmd $ replyServer log local links haddock store home (dataDir </> "html") scope
+    server log' cmd $ replyServer log' local links haddock' store home (dataDir </> "html") scope
+actionServer _ = error "actionServer: expected Server"
 
 actionReplay :: CmdLine -> IO ()
 actionReplay Replay {..} = withBuffering stdout NoBuffering $ do
   src <- readFile logs
   let qs = catMaybes [readInput url | _ : ip : _ : url : _ <- map words $ lines src, ip /= "-"]
   (t, _) <- duration $ withSearch database $ \store -> do
-    log <- logNone
+    log' <- logNone
     dataDir <- getDataDir
-    let op = replyServer log False False Nothing store "" (dataDir </> "html") scope
+    let op = replyServer log' False False Nothing store "" (dataDir </> "html") scope
     replicateM_ repeat_ $ forM_ qs $ \x -> do
       res <- op x
       evaluate $ rnf res
       putChar '.'
   putStrLn $ "\nTook " ++ showDuration t ++ " (" ++ showDuration (t / intToDouble (repeat_ * length qs)) ++ ")"
+actionReplay _ = error "actionReplay: expected Replay"
 
 {-# NOINLINE spawned #-}
 spawned :: UTCTime
 spawned = unsafePerformIO getCurrentTime
 
 replyServer :: Log -> Bool -> Bool -> Maybe FilePath -> StoreRead -> String -> FilePath -> String -> Input -> IO Output
-replyServer log local links haddock store home htmlDir scope Input {..} = case inputURL of
+replyServer log' local links haddock store home htmlDir scope Input {..} = case inputURL of
   -- without -fno-state-hack things can get folded under this lambda
   [] -> do
     let grabBy name = [x | (a, x) <- inputArgs, name a, x /= ""]
@@ -107,9 +109,9 @@ replyServer log local links haddock store home htmlDir scope Input {..} = case i
                 templateIndex
                 [ ("tags", html $ tagOptions qScope),
                   ("body", html body),
-                  ("title", text $ unwords qSource ++ " - Bloogle"),
-                  ("search", text $ unwords qSearch),
-                  ("robots", text $ if any isQueryScope q then "none" else "index")
+                  ("title", text' $ unwords qSource ++ " - Bloogle"),
+                  ("search", text' $ unwords qSearch),
+                  ("robots", text' $ if any isQueryScope q then "none" else "index")
                 ]
         | otherwise -> OutputHTML <$> templateRender templateHome []
       Just "body" -> OutputHTML <$> if null qSource then templateRender templateEmpty [] else templateRender (html body) []
@@ -129,9 +131,9 @@ replyServer log local links haddock store home htmlDir scope Input {..} = case i
   ["search.xml"] -> OutputXML <$> templateRender templateSearch []
   ["canary"] -> do
     now <- getCurrentTime
-    summ <- logSummary log
+    summ <- logSummary log'
     let errs = sum [summaryErrors | Summary {..} <- summ, summaryDate >= pred (utctDay now)]
-    let alive = fromRational $ toRational $ (now `diffUTCTime` spawned) / (24 * 60 * 60)
+    let alive = fromRational $ toRational $ (now `diffUTCTime` spawned) / (24 * 60 * 60) :: Double
     pure $
       (if errs == 0 && alive < 1.5 then OutputText else OutputFail) $
         lbstrPack $
@@ -168,16 +170,16 @@ replyServer log local links haddock store home htmlDir scope Input {..} = case i
     pure $ OutputFile $ joinPath $ htmlDir : xs
   where
     html = templateMarkup
-    text = templateMarkup . H.string
+    text' = templateMarkup . H.string
 
     tagOptions sel = mconcat [H.option Text.Blaze.!? (x `elem` sel, H.selected "selected") $ H.string x | x <- completionTags store]
     params =
-      [ ("home", text home),
-        ("version", text $ showVersion version ++ " " ++ showUTCTime "%Y-%m-%d %H:%M" spawned)
+      [ ("home", text' home),
+        ("version", text' $ showVersion version ++ " " ++ showUTCTime "%Y-%m-%d %H:%M" spawned)
       ]
     templateIndex = templateFile (htmlDir </> "index.html") `templateApply` params
     templateEmpty = templateFile (htmlDir </> "welcome.html")
-    templateHome = templateIndex `templateApply` [("tags", html $ tagOptions []), ("body", templateEmpty), ("title", text "Bloogle"), ("search", text ""), ("robots", text "index")]
+    templateHome = templateIndex `templateApply` [("tags", html $ tagOptions []), ("body", templateEmpty), ("title", text' "Bloogle"), ("search", text' ""), ("robots", text' "index")]
     templateSearch = templateFile (htmlDir </> "search.xml") `templateApply` params
 
 dedupeTake :: (Ord k) => Int -> (v -> k) -> [v] -> [[v]]
@@ -190,21 +192,24 @@ dedupeTake n key = f [] Map.empty
       | otherwise = f (k : res) (Map.insert k [x] mp) xs
       where
         k = key x
+    f _ _ [] = error "dedupeTake.f: unexpected input"
 
 showResults :: Bool -> Bool -> Maybe FilePath -> [(String, String)] -> [Query] -> [[Target]] -> Markup
 showResults local links haddock args query results = do
   H.h1 $ renderQuery query
   when (null results) $ H.p "No results found"
-  forM_ results $ \is@(Target {..} : _) -> do
-    H.div ! H.class_ "result" $ do
-      H.div ! H.class_ "ans" $ do
-        H.a ! H.href (H.stringValue $ showURL local haddock targetURL) $
-          displayItem query targetItem
-        when links $
-          whenJust (useLink is) $ \link ->
-            H.div ! H.class_ "links" $ H.a ! H.href (H.stringValue link) $ "Uses"
-      H.div ! H.class_ "from" $ showFroms local haddock is
-      H.div ! H.class_ "doc newline shut" $ H.preEscapedString targetDocs
+  forM_ results $ \is -> case is of
+    [] -> pure ()
+    (Target {..} : _) ->
+      H.div ! H.class_ "result" $ do
+        H.div ! H.class_ "ans" $ do
+          H.a ! H.href (H.stringValue $ showURL local haddock targetURL) $
+            displayItem query targetItem
+          when links $
+            whenJust (useLink is) $ \link ->
+              H.div ! H.class_ "links" $ H.a ! H.href (H.stringValue link) $ "Uses"
+        H.div ! H.class_ "from" $ showFroms local haddock is
+        H.div ! H.class_ "doc newline shut" $ H.preEscapedString targetDocs
   H.ul ! H.id "left" $ -- if there's already a scope query we don't show subquery links because bots will get lost in a maze of links.
     if (any isQueryScope query)
       then pure ()
@@ -234,9 +239,9 @@ showResults local links haddock args query results = do
 -- find the <span class=name>X</span> bit
 extractName :: String -> String
 extractName x
-  | Just (_, x) <- stripInfix "<span class=name>" x,
-    Just (x, _) <- stripInfix "</span>" x =
-      unHTML x
+  | Just (_, x') <- stripInfix "<span class=name>" x,
+    Just (x'', _) <- stripInfix "</span>" x' =
+      unHTML x''
 extractName x = x
 
 itemCategories :: [Target] -> [(String, String)]
@@ -286,10 +291,10 @@ action_server_test_ = do
 action_server_test :: FilePath -> IO ()
 action_server_test database = do
   testing "Action.Server.replyServer" $ withSearch database $ \store -> do
-    log <- logNone
+    log' <- logNone
     dataDir <- getDataDir
     let check p q = do
-          OutputHTML (lbstrUnpack -> res) <- replyServer log False False Nothing store "" (dataDir </> "html") "" (Input [] [("bloogle", q)])
+          OutputHTML (lbstrUnpack -> res) <- replyServer log' False False Nothing store "" (dataDir </> "html") "" (Input [] [("bloogle", q)])
           if p res then putChar '.' else fail $ "Bad substring: " ++ res
     let q === want = check (want `isInfixOf`) q
     let q /== want = check (not . isInfixOf want) q

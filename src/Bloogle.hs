@@ -31,15 +31,15 @@ withDatabase file act = storeReadFile file $ act . Database
 
 -- | Search a database, given a query string, produces a list of results.
 searchDatabase :: Database -> String -> [Target]
-searchDatabase (Database db) query = snd $ search db $ parseQuery query
+searchDatabase (Database db) q = snd $ search db $ parseQuery q
 
 -- | Run a command line Bloogle operation.
 bloogle :: [String] -> IO ()
 bloogle args = do
-  args <- getCmdLine args
-  case args of
-    Search {} -> actionSearch args
-    Generate {} -> actionGenerate args
-    Server {} -> actionServer args
-    Test {} -> actionTest args
-    Replay {} -> actionReplay args
+  args' <- getCmdLine args
+  case args' of
+    Search {} -> actionSearch args'
+    Generate {} -> actionGenerate args'
+    Server {} -> actionServer args'
+    Test {} -> actionTest args'
+    Replay {} -> actionReplay args'
