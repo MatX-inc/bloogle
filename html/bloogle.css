@@ -299,14 +299,6 @@ a.dull, a.dull:hover {
 .c4{background-color: #fcf;}
 .c5{background-color: #cff;}
 
-.more, .more:visited {
-    padding-left: 16px;
-    background-image: url(more_blue.png);
-    background-repeat: no-repeat;
-    background-position: center left;
-    color: blue;
-}
-
 /** PARENTS **/
 
 .from a, .p1, .p2 {
