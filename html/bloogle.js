@@ -66,7 +66,7 @@ ready(function(){
         if (!instant) return;
         function getScope(){
             var v = scopeEl ? scopeEl.value : "";
-            return v == null || v == "set:stackage" ? "" : v;
+            return v == null ? "" : v;
         }
 
         var nowBloogle = bloogleEl.value;
