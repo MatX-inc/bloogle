@@ -6,6 +6,10 @@ Bloogle is a [Bluespec Classic](https://github.com/B-Lang-org/bsc) API search en
 * **Source:** https://github.com/MatX-inc/bloogle
 * **Issues:** https://github.com/MatX-inc/bloogle/issues
 
+> [!WARNING]
+> This version is "vibe debloated" to mass-remove functionality that doesn't make sense for our use-case.
+> A more thoughtful port is in progress.
+
 ## Searching
 
 A query can be text, a type signature, or a mix of the two:
