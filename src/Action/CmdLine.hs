@@ -11,7 +11,6 @@ module Action.CmdLine
   )
 where
 
-import Control.Exception.Extra (errorIO)
 import Data.List.Extra
 import Data.Version
 import Paths_bloogle (version)
@@ -63,32 +62,23 @@ data CmdLine
         scope :: String
       }
   | Test
-      { disable_network_tests :: Bool,
-        database :: FilePath
+      { disable_network_tests :: Bool
       }
   deriving (Data, Typeable, Show)
 
 getCmdLine :: [String] -> IO CmdLine
 getCmdLine argv = do
+  -- the database is a required positional argument for every command except
+  -- `test` (which builds its own throwaway sample database); cmdargs enforces
+  -- the requirement via `argPos`, so there is no default location to fill in.
   args1 <- withArgs argv $ cmdArgsRun cmdLineMode
 
-  -- a database must be specified explicitly; there is no default location
-  -- (`test` is exempt: it builds its own throwaway sample database)
-  args2 <- case args1 of
-    Test {} -> pure args1
-    _
-      | null (database args1) ->
-          errorIO "No database specified: pass --database FILE (build one with 'bloogle generate --local=DIR --database=FILE')"
-      | otherwise -> pure args1
-
   -- fix up people using Hoogle 4 instructions
-  args3 <- case args2 of
+  case args1 of
     Generate {..} | "all" `elem` include -> do
       putStrLn "Warning: 'all' argument is no longer required, and has been ignored."
-      pure $ args2 {include = delete "all" include}
-    _ -> pure args2
-
-  pure args3
+      pure $ args1 {include = delete "all" include}
+    _ -> pure args1
 
 defaultGenerate :: CmdLine
 defaultGenerate = generate
@@ -110,7 +100,7 @@ search_ =
       link = def &= help "Give URL's for each result",
       numbers = def &= help "Give counter for each result",
       info = def &= help "Give extended information about the first n results (set n with --count, default is 1)",
-      database = def &= typFile &= help "Name of database to use (use .hoo extension)",
+      database = def &= argPos 0 &= typ "DATABASE",
       count = Nothing &= name "n" &= help "Maximum number of results to return (defaults to 10)",
       query = def &= args &= typ "QUERY",
       repeat_ = 1 &= help "Number of times to repeat (for benchmarking)",
@@ -121,7 +111,8 @@ search_ =
 generate :: CmdLine
 generate =
   Generate
-    { include = def &= args &= typ "PACKAGE",
+    { database = def &= argPos 0 &= typ "DATABASE",
+      include = def &= args &= typ "PACKAGE",
       local_ = def &= opt "" &= help "Index local packages and link to local haddock docs",
       count = Nothing &= name "n" &= help "Maximum number of packages to index (defaults to all)",
       haddock = def &= help "Use local haddocks",
@@ -132,7 +123,8 @@ generate =
 server :: CmdLine
 server =
   Server
-    { port = 8080 &= typ "INT" &= help "Port number",
+    { database = def &= argPos 0 &= typ "DATABASE",
+      port = 8080 &= typ "INT" &= help "Port number",
       logs = "" &= opt "log.txt" &= typFile &= help "File to log requests to (defaults to stdout)",
       local = False &= help "Allow following file:// links, restricts to 127.0.0.1  Set --host explicitely (including to '*' for any host) to override the localhost-only behaviour",
       haddock = def &= help "Serve local haddocks from a specified directory",
@@ -151,7 +143,8 @@ server =
 replay :: CmdLine
 replay =
   Replay
-    { logs = "log.txt" &= args &= typ "FILE"
+    { database = def &= argPos 0 &= typ "DATABASE",
+      logs = "log.txt" &= argPos 1 &= typ "LOGFILE"
     }
     &= help "Replay a log file"
 

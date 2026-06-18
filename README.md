@@ -38,15 +38,15 @@ Restrict or exclude results by module:
 ## Usage
 
 Bloogle always needs a database to read or build — there is no default
-database location, and it never downloads anything. Every command takes an
-explicit `--database`.
+database location, and it never downloads anything. Every command takes the
+database as its first positional argument.
 
 ### Build a database
 
 Generate a database from a directory of Bluespec API docs in Hoogle's input
 `.txt` format (one file per package, each beginning with `@package`):
 
-    $ bloogle generate --local=path/to/docs --database=bluespec.hoo
+    $ bloogle generate bluespec.hoo --local=path/to/docs
 
 You can also point at a directory of Haddock-style output with
 `--haddock=DIR`. Generating from an online package set is not supported, so a
@@ -54,13 +54,13 @@ bare `bloogle generate` is an error — pass `--local` or `--haddock`.
 
 ### Search from the command line
 
-    $ bloogle search --database=bluespec.hoo "Vector n a -> a"
+    $ bloogle search bluespec.hoo "Vector n a -> a"
 
 Quote the query so the shell doesn't interpret the `->` or brackets.
 
 ### Run the web server
 
-    $ bloogle server --database=bluespec.hoo --home=https://bloogle.bluespec.dev
+    $ bloogle server bluespec.hoo --home=https://bloogle.bluespec.dev
 
 * `--home` sets the URL the logo links to and the base URL baked into the
   OpenSearch descriptor (`search.xml`). It defaults to `http://localhost:8080`
@@ -108,7 +108,7 @@ from Hoogle. The main differences:
 * Indexes Bluespec libraries instead of Haskell/Stackage
 * Generates only from local sources (`--local` / `--haddock`) — no
   Hackage/Stackage download
-* Requires an explicit `--database` (no default location)
+* Requires the database as a positional argument (no default location)
 * Dependency-free front-end (no jQuery) and a Prometheus `/metrics` endpoint
 
 ## License
