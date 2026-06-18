@@ -9,17 +9,13 @@
 module Input.Cabal
   ( PkgName,
     Package (..),
-    readGhcPkg,
     packagePopularity,
     readCabal,
   )
 where
 
-import Control.Applicative
 import Control.DeepSeq
-import Control.Exception.Extra
 import Control.Monad
-import qualified Data.ByteString.UTF8 as UTF8
 import Data.List.Extra
 import qualified Data.Map.Strict as Map
 import Data.Maybe
@@ -32,16 +28,12 @@ import qualified Distribution.PackageDescription.Parsec as PD
 import qualified Distribution.Pretty
 import qualified Distribution.SPDX as SPDX
 import qualified Distribution.Types.BuildInfo.Lens as Lens
-import Distribution.Types.PackageName (mkPackageName, unPackageName)
+import Distribution.Types.PackageName (unPackageName)
 import Distribution.Types.Version (versionNumbers)
 import Distribution.Utils.ShortText (fromShortText)
 import General.Str
 import General.Util
-import System.Directory
-import System.Exit
 import System.FilePath
-import System.IO.Extra
-import qualified System.Process.ByteString as BS
 import Prelude
 
 ---------------------------------------------------------------------
@@ -96,43 +88,6 @@ packagePopularity cbl = mp `seq` (errs, mp)
     (good, bad) =
       Map.partitionWithKey (\k _ -> k `Map.member` cbl) $
         Map.fromListWith (++) [(b, [a]) | (a, bs) <- Map.toList cbl, b <- packageDepends bs]
-
----------------------------------------------------------------------
--- READERS
-
--- | Run 'ghc-pkg' and get a list of packages which are installed.
-readGhcPkg :: IO (Map.Map PkgName Package)
-readGhcPkg = do
-  topdir <- findExecutable "ghc-pkg"
-  (exit, stdout, stderr) <-
-    -- From GHC 9.0.1, the `haddock-html` field in `*.conf` files for GHC boot
-    -- libraries has used `${pkgroot}`, which can be expanded in the output.
-
-    -- On Windows, the `haddock-html` field in `*.conf` files for GHC boot
-    -- libraries for GHC >= 9.0 && < 9.10 contain errors. For example, this may
-    -- be specified:
-    --
-    --     haddock-html: ${pkgroot}/../../doc/html/libraries/base-4.18.0.0
-    --
-    -- when the correct specification would be:
-    --
-    --     haddock-html: ${pkgroot}/../doc/html/libraries/base-4.18.0.0
-    --
-    -- However haddock does not seek to correct that. It assumes that users will
-    -- correct manually the affected `*.conf` files.
-
-    -- important to use BS process reading so it's in Binary format, see #194
-    BS.readProcessWithExitCode "ghc-pkg" ["dump", "--expand-pkgroot"] mempty
-  when (exit /= ExitSuccess) $
-    errorIO $
-      "Error when reading from ghc-pkg, " ++ show exit ++ "\n" ++ UTF8.toString stderr
-  let g (stripPrefix "$topdir" -> Just x) | Just t <- topdir = takeDirectory t ++ x
-      -- \^ Backwards compatibility with GHC < 9.0
-      g x = x
-  let fixer p = p {packageLibrary = True, packageDocs = g <$> packageDocs p}
-  let f ((stripPrefix "name: " -> Just x) : xs) = Just (mkPackageName $ trimStart x, fixer $ readCabal $ bstrPack $ unlines xs)
-      f _ = Nothing
-  pure $ Map.fromList $ mapMaybe f $ splitOn ["---"] $ lines $ filter (/= '\r') $ UTF8.toString stdout
 
 ---------------------------------------------------------------------
 -- PARSERS

@@ -65,7 +65,6 @@ library
         haskell-src-exts >= 1.22 && < 1.24,
         http-types,
         mmap,
-        process-extras,
         prometheus-client,
         safe >= 0.3.20,
         storable-tuple,

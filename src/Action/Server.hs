@@ -35,7 +35,6 @@ import Numeric.Extra
 import Output.Tags
 import Paths_bloogle
 import Query
-import System.Directory
 import System.FilePath
 import System.IO.Extra
 import System.IO.Unsafe
@@ -61,9 +60,8 @@ actionServer cmd@Server {..} = do
   putStrLn . showDuration =<< time
   _ <- evaluate spawned
   dataDir <- maybe getDataDir pure datadir
-  haddock' <- maybe (pure Nothing) (fmap Just . canonicalizePath) haddock
   withSearch database $ \store ->
-    server log' cmd $ replyServer log' local links haddock' store home (dataDir </> "html") scope
+    server log' cmd $ replyServer log' local links store home (dataDir </> "html") scope
 actionServer _ = error "actionServer: expected Server"
 
 actionReplay :: CmdLine -> IO ()
@@ -73,7 +71,7 @@ actionReplay Replay {..} = withBuffering stdout NoBuffering $ do
   (t, _) <- duration $ withSearch database $ \store -> do
     log' <- logNone
     dataDir <- getDataDir
-    let op = replyServer log' False False Nothing store "" (dataDir </> "html") scope
+    let op = replyServer log' False False store "" (dataDir </> "html") scope
     replicateM_ repeat_ $ forM_ qs $ \x -> do
       res <- op x
       evaluate $ rnf res
@@ -85,8 +83,8 @@ actionReplay _ = error "actionReplay: expected Replay"
 spawned :: UTCTime
 spawned = unsafePerformIO getCurrentTime
 
-replyServer :: Log -> Bool -> Bool -> Maybe FilePath -> StoreRead -> String -> FilePath -> String -> Input -> IO Output
-replyServer log' local links haddock store home htmlDir scope Input {..} = case inputURL of
+replyServer :: Log -> Bool -> Bool -> StoreRead -> String -> FilePath -> String -> Input -> IO Output
+replyServer log' local links store home htmlDir scope Input {..} = case inputURL of
   -- without -fno-state-hack things can get folded under this lambda
   [] -> do
     let grabBy name = [x | (a, x) <- inputArgs, name a, x /= ""]
@@ -99,7 +97,7 @@ replyServer log' local links haddock store home htmlDir scope Input {..} = case 
     let q = concatMap parseQuery qSource
     let (q2, results) = search store q
     let body =
-          showResults local links haddock (filter ((/= "mode") . fst) inputArgs) q2 $
+          showResults local links (filter ((/= "mode") . fst) inputArgs) q2 $
             dedupeTake 25 (\t -> t {targetURL = "", targetPackage = Nothing, targetModule = Nothing}) results
     case lookup "mode" inputArgs of
       Nothing
@@ -152,9 +150,6 @@ replyServer log' local links haddock store home htmlDir scope Input {..} = case 
     pure $ case stats of
       Nothing -> OutputFail $ lbstrPack "GHC Statistics is not enabled, restart with +RTS -T"
       Just x -> OutputText $ lbstrPack x
-  "haddock" : xs | Just x <- haddock -> do
-    let file = intercalate "/" $ x : xs
-    pure $ OutputFile $ file ++ (if hasTrailingPathSeparator file then "index.html" else "")
   "file" : xs | local -> do
     let x = ['/' | not isWindows] ++ intercalate "/" (dropWhile null xs)
     let file = x ++ (if hasTrailingPathSeparator x then "index.html" else "")
@@ -194,8 +189,8 @@ dedupeTake n key = f [] Map.empty
         k = key x
     f _ _ [] = error "dedupeTake.f: unexpected input"
 
-showResults :: Bool -> Bool -> Maybe FilePath -> [(String, String)] -> [Query] -> [[Target]] -> Markup
-showResults local links haddock args query results = do
+showResults :: Bool -> Bool -> [(String, String)] -> [Query] -> [[Target]] -> Markup
+showResults local links args query results = do
   H.h1 $ renderQuery query
   when (null results) $ H.p "No results found"
   forM_ results $ \is -> case is of
@@ -203,12 +198,12 @@ showResults local links haddock args query results = do
     (Target {..} : _) ->
       H.div ! H.class_ "result" $ do
         H.div ! H.class_ "ans" $ do
-          H.a ! H.href (H.stringValue $ showURL local haddock targetURL) $
+          H.a ! H.href (H.stringValue $ showURL local targetURL) $
             displayItem query targetItem
           when links $
             whenJust (useLink is) $ \link ->
               H.div ! H.class_ "links" $ H.a ! H.href (H.stringValue link) $ "Uses"
-        H.div ! H.class_ "from" $ showFroms local haddock is
+        H.div ! H.class_ "from" $ showFroms local is
         H.div ! H.class_ "doc newline shut" $ H.preEscapedString targetDocs
   H.ul ! H.id "left" $ -- if there's already a scope query we don't show subquery links because bots will get lost in a maze of links.
     if (any isQueryScope query)
@@ -251,18 +246,17 @@ itemCategories xs =
     ++ [("is", "module") | any ((==) "module" . targetType) xs]
     ++ nubOrd [("package", p) | Just (p, _) <- map targetPackage xs]
 
-showFroms :: Bool -> Maybe FilePath -> [Target] -> Markup
-showFroms local haddock xs = mconcat $ intersperse ", " $ flip map pkgs $ \p ->
+showFroms :: Bool -> [Target] -> Markup
+showFroms local xs = mconcat $ intersperse ", " $ flip map pkgs $ \p ->
   let ms = filter ((==) p . targetPackage) xs
-   in mconcat $ intersperse " " [H.a ! H.href (H.stringValue $ showURL local haddock b) $ H.string a | (a, b) <- catMaybes $ p : map remod ms]
+   in mconcat $ intersperse " " [H.a ! H.href (H.stringValue $ showURL local b) $ H.string a | (a, b) <- catMaybes $ p : map remod ms]
   where
     remod Target {..} = do (a, _) <- targetModule; pure (a, targetURL)
     pkgs = nubOrd $ map targetPackage xs
 
-showURL :: Bool -> Maybe FilePath -> URL -> String
-showURL _ (Just _) x = "haddock/" ++ dropPrefix "file:///" x
-showURL True _ (stripPrefix "file:///" -> Just x) = "file/" ++ x
-showURL _ _ x = x
+showURL :: Bool -> URL -> String
+showURL True (stripPrefix "file:///" -> Just x) = "file/" ++ x
+showURL _ x = x
 
 -------------------------------------------------------------
 -- DISPLAY AN ITEM (bold keywords etc)
@@ -294,7 +288,7 @@ action_server_test database = do
     log' <- logNone
     dataDir <- getDataDir
     let check p q = do
-          OutputHTML (lbstrUnpack -> res) <- replyServer log' False False Nothing store "" (dataDir </> "html") "" (Input [] [("bloogle", q)])
+          OutputHTML (lbstrUnpack -> res) <- replyServer log' False False store "" (dataDir </> "html") "" (Input [] [("bloogle", q)])
           if p res then putChar '.' else fail $ "Bad substring: " ++ res
     let q === want = check (want `isInfixOf`) q
     let q /== want = check (not . isInfixOf want) q

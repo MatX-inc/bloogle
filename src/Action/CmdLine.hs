@@ -33,10 +33,9 @@ data CmdLine
       }
   | Generate
       { database :: FilePath,
+        srcdir :: FilePath,
         include :: [String],
         count :: Maybe Int,
-        local_ :: [FilePath],
-        haddock :: Maybe FilePath,
         debug :: Bool
       }
   | Server
@@ -44,7 +43,6 @@ data CmdLine
         database :: FilePath,
         logs :: FilePath,
         local :: Bool,
-        haddock :: Maybe FilePath,
         links :: Bool,
         scope :: String,
         home :: String,
@@ -112,13 +110,12 @@ generate :: CmdLine
 generate =
   Generate
     { database = def &= argPos 0 &= typ "DATABASE",
+      srcdir = def &= argPos 1 &= typ "SRCDIR",
       include = def &= args &= typ "PACKAGE",
-      local_ = def &= opt "" &= help "Index local packages and link to local haddock docs",
       count = Nothing &= name "n" &= help "Maximum number of packages to index (defaults to all)",
-      haddock = def &= help "Use local haddocks",
       debug = def &= help "Generate debug information"
     }
-    &= help "Generate Bloogle databases"
+    &= help "Generate a Bloogle database from a directory of .txt files"
 
 server :: CmdLine
 server =
@@ -127,7 +124,6 @@ server =
       port = 8080 &= typ "INT" &= help "Port number",
       logs = "" &= opt "log.txt" &= typFile &= help "File to log requests to (defaults to stdout)",
       local = False &= help "Allow following file:// links, restricts to 127.0.0.1  Set --host explicitely (including to '*' for any host) to override the localhost-only behaviour",
-      haddock = def &= help "Serve local haddocks from a specified directory",
       scope = def &= help "Default scope to start with",
       links = def &= help "Display extra links",
       home = "http://localhost:8080" &= typ "URL" &= help "Base URL of this server: linked to by the logo and baked into search.xml. Set this to your public URL when deploying.",

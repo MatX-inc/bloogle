@@ -46,11 +46,11 @@ database as its first positional argument.
 Generate a database from a directory of Bluespec API docs in Hoogle's input
 `.txt` format (one file per package, each beginning with `@package`):
 
-    $ bloogle generate bluespec.hoo --local=path/to/docs
+    $ bloogle generate bluespec.hoo path/to/docs
 
-You can also point at a directory of Haddock-style output with
-`--haddock=DIR`. Generating from an online package set is not supported, so a
-bare `bloogle generate` is an error — pass `--local` or `--haddock`.
+The source directory is a required positional argument; `bloogle` reads the
+`.txt` (and any `.cabal`) files under it. Generating from an online package set
+is not supported.
 
 ### Search from the command line
 
@@ -106,8 +106,8 @@ Mitchell. The core search engine, type-search algorithm, and web UI all derive
 from Hoogle. The main differences:
 
 * Indexes Bluespec libraries instead of Haskell/Stackage
-* Generates only from local sources (`--local` / `--haddock`) — no
-  Hackage/Stackage download
+* Generates only from a local directory of `.txt` files — no Hackage/Stackage
+  download and no `ghc-pkg`/Haddock integration
 * Requires the database as a positional argument (no default location)
 * Dependency-free front-end (no jQuery) and a Prometheus `/metrics` endpoint
 
