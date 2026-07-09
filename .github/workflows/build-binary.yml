@@ -1,0 +1,56 @@
+name: Build Binary
+
+# This file defines a workflow parameterized by OS that builds the bloogle
+# executable and uploads it as a tarball artifact. It is called from the
+# ci and release workflows.
+
+on:
+  workflow_call:
+    inputs:
+      os:
+        required: true
+        type: string
+
+jobs:
+  build:
+    name: "Binary: ${{ inputs.os }}"
+    runs-on: ${{ inputs.os }}
+    timeout-minutes: 45
+
+    steps:
+    - uses: actions/checkout@v6
+    - name: Install dependencies
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libgmp-dev zlib1g-dev pkg-config
+    - uses: haskell-actions/setup@v2
+      id: setup-haskell
+      with:
+        # A reliable and stable version of GHC
+        # (the same one bsc pins for its release builds)
+        ghc-version: 9.6.7
+    - run: cabal freeze
+    # Include the os (not just runner.os) in the cache key, so that
+    # different architectures and OS versions don't share caches.
+    - uses: actions/cache@v5
+      with:
+        path: |
+          ${{ steps.setup-haskell.outputs.cabal-store }}
+          dist-newstyle
+        key: binaries-${{ inputs.os }}-${{ hashFiles('cabal.project.freeze') }}
+        restore-keys: binaries-${{ inputs.os }}-
+    - name: Build
+      run: cabal install exe:bloogle --install-method=copy --installdir=bin
+    - name: Smoketest
+      run: bin/bloogle --version
+    # Tar the binary before upload, because the artifact zip does not
+    # preserve the executable permission bit:
+    #   https://github.com/actions/upload-artifact/issues/38
+    - name: Package
+      run: tar czf bloogle-${{ inputs.os }}.tar.gz -C bin bloogle
+    - name: Upload artifact
+      uses: actions/upload-artifact@v6
+      with:
+        name: bloogle-${{ inputs.os }}
+        path: bloogle-${{ inputs.os }}.tar.gz

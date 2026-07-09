@@ -4,6 +4,13 @@ on:
   pull_request:
   schedule:
   - cron:  '0 3 * * 6' # 3am Saturday
+
+concurrency:
+  # When changes to a PR trigger a new run, cancel in-progress runs for that PR;
+  # but pushes should not cancel workflows from previous pushes.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   test:
     runs-on: ${{ matrix.os }}
@@ -21,16 +28,29 @@ jobs:
 
     steps:
     - run: git config --global core.autocrlf false
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - uses: haskell-actions/setup@v2
       id: setup-haskell
       with:
         ghc-version: ${{ matrix.ghc }}
     - run: cabal freeze
-    - uses: actions/cache@v4
+    - uses: actions/cache@v5
       with:
         path: ${{ steps.setup-haskell.outputs.cabal-store }}
         key: ${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('cabal.project.freeze') }}
         restore-keys: ${{ runner.os }}-${{ matrix.ghc }}-
     - run: cabal build all
     - run: cabal run bloogle -- test
+
+  # ------------------------------
+  # Binary builds for every commit
+
+  binaries:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-22.04, macos-15 ]
+    name: "Binary: ${{ matrix.os }}"
+    uses: ./.github/workflows/build-binary.yml
+    with:
+      os: ${{ matrix.os }}
