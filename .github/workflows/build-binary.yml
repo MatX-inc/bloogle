@@ -85,11 +85,11 @@ jobs:
       shell: bash
       run: |
         ./bloogle --version
-        ./bloogle generate smoke.hoo misc/sample-data
-        ./bloogle smoke.hoo Wife | grep Wife
-        mkdir smoke-cwd
-        cd smoke-cwd
-        ../bloogle serve ../smoke.hoo --port 18080 &
+        ./bloogle generate test.hoo misc/sample-data
+        ./bloogle test.hoo Wife | grep Wife
+        mkdir test-cwd
+        cd test-cwd
+        ../bloogle serve ../test.hoo --port 18080 &
         SERVER=$!
         trap 'kill $SERVER 2>/dev/null || true' EXIT
         for _ in $(seq 1 30); do
