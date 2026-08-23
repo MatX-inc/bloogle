@@ -1,9 +1,9 @@
 name: Build Binary
 
 # This file defines a workflow parameterized by OS that builds the bloogle
-# executable, uploads it as a tarball artifact, and smoke tests that artifact
-# on a separate toolchain-free runner. It is called from the ci and release
-# workflows; a failing smoketest blocks the release.
+# executable, uploads it as a tarball artifact, and tests that artifact
+# end-to-end on a separate toolchain-free runner. It is called from the ci
+# and release workflows; a failing artifact test blocks the release.
 
 on:
   workflow_call:
@@ -64,8 +64,8 @@ jobs:
   # machine that built it. The sparse checkout materializes only the
   # misc/sample-data fixture (plus root-level files): html/ is not on the
   # runner's disk at all, so the server cannot be leaning on an on-disk copy.
-  smoketest:
-    name: "Smoketest: ${{ inputs.os }}"
+  test-artifact:
+    name: "Test artifact: ${{ inputs.os }}"
     runs-on: ${{ inputs.os }}
     timeout-minutes: 10
     needs: build
@@ -81,7 +81,7 @@ jobs:
         name: bloogle-${{ inputs.os }}
     - name: Unpack
       run: tar xzf bloogle-${{ inputs.os }}.tar.gz
-    - name: Smoketest
+    - name: Test
       shell: bash
       run: |
         ./bloogle --version
