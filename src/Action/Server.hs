@@ -24,6 +24,7 @@ import Data.Monoid
 import Data.Time.Clock
 import Data.Tuple.Extra
 import Data.Version
+import General.Embed
 import General.Log
 import General.Store
 import General.Str
@@ -33,7 +34,7 @@ import General.Web
 import Input.Item
 import Numeric.Extra
 import Output.Tags
-import Paths_bloogle
+import Paths_bloogle (version)
 import Query
 import System.FilePath
 import System.IO.Extra
@@ -59,9 +60,8 @@ actionServer cmd@Server {..} = do
     \x -> BS.pack "bloogle=" `BS.isInfixOf` x && not (BS.pack "is:ping" `BS.isInfixOf` x)
   putStrLn . showDuration =<< time
   _ <- evaluate spawned
-  dataDir <- maybe getDataDir pure datadir
   withSearch database $ \store ->
-    server log' cmd $ replyServer log' local links store home (dataDir </> "html") scope
+    server log' cmd $ replyServer log' local links store home ((</> "html") <$> datadir) scope
 actionServer _ = error "actionServer: expected Server"
 
 actionReplay :: CmdLine -> IO ()
@@ -70,8 +70,7 @@ actionReplay Replay {..} = withBuffering stdout NoBuffering $ do
   let qs = catMaybes [readInput url | _ : ip : _ : url : _ <- map words $ lines src, ip /= "-"]
   (t, _) <- duration $ withSearch database $ \store -> do
     log' <- logNone
-    dataDir <- getDataDir
-    let op = replyServer log' False False store "" (dataDir </> "html") scope
+    let op = replyServer log' False False store "" Nothing scope
     replicateM_ repeat_ $ forM_ qs $ \x -> do
       res <- op x
       evaluate $ rnf res
@@ -83,7 +82,10 @@ actionReplay _ = error "actionReplay: expected Replay"
 spawned :: UTCTime
 spawned = unsafePerformIO getCurrentTime
 
-replyServer :: Log -> Bool -> Bool -> StoreRead -> String -> FilePath -> String -> Input -> IO Output
+-- | 'Nothing' for the html directory means serve the assets embedded in the
+--   binary; 'Just' means serve them from disk (the --datadir flag), which
+--   also picks up edits without a restart, for front-end development.
+replyServer :: Log -> Bool -> Bool -> StoreRead -> String -> Maybe FilePath -> String -> Input -> IO Output
 replyServer log' local links store home htmlDir scope Input {..} = case inputURL of
   -- without -fno-state-hack things can get folded under this lambda
   [] -> do
@@ -162,7 +164,11 @@ replyServer log' local links store home htmlDir scope Input {..} = case inputURL
         -- so replace on file:// and drop all leading empty paths above
         pure $ OutputHTML $ lbstrPack $ replace "file://" "/file/" src
   xs ->
-    pure $ OutputFile $ joinPath $ htmlDir : xs
+    pure $ case htmlDir of
+      Just dir -> OutputFile $ joinPath $ dir : xs
+      Nothing -> case lookup (joinPath xs) embeddedHtml of
+        Just src -> OutputStatic (joinPath xs) $ lbstrFromChunks [src]
+        Nothing -> OutputNotFound $ lbstrPack $ "File not found: " ++ joinPath xs
   where
     html = templateMarkup
     text' = templateMarkup . H.string
@@ -172,10 +178,13 @@ replyServer log' local links store home htmlDir scope Input {..} = case inputURL
       [ ("home", text' home),
         ("version", text' $ showVersion version ++ " " ++ showUTCTime "%Y-%m-%d %H:%M" spawned)
       ]
-    templateIndex = templateFile (htmlDir </> "index.html") `templateApply` params
-    templateEmpty = templateFile (htmlDir </> "welcome.html")
+    htmlTemplate file = case htmlDir of
+      Just dir -> templateFile $ dir </> file
+      Nothing -> templateBStr $ embeddedHtmlFile file
+    templateIndex = htmlTemplate "index.html" `templateApply` params
+    templateEmpty = htmlTemplate "welcome.html"
     templateHome = templateIndex `templateApply` [("tags", html $ tagOptions []), ("body", templateEmpty), ("title", text' "Bloogle"), ("search", text' ""), ("robots", text' "index")]
-    templateSearch = templateFile (htmlDir </> "search.xml") `templateApply` params
+    templateSearch = htmlTemplate "search.xml" `templateApply` params
 
 dedupeTake :: (Ord k) => Int -> (v -> k) -> [v] -> [[v]]
 dedupeTake n key = f [] Map.empty
@@ -286,9 +295,8 @@ action_server_test :: FilePath -> IO ()
 action_server_test database = do
   testing "Action.Server.replyServer" $ withSearch database $ \store -> do
     log' <- logNone
-    dataDir <- getDataDir
     let check p q = do
-          OutputHTML (lbstrUnpack -> res) <- replyServer log' False False store "" (dataDir </> "html") "" (Input [] [("bloogle", q)])
+          OutputHTML (lbstrUnpack -> res) <- replyServer log' False False store "" Nothing "" (Input [] [("bloogle", q)])
           if p res then putChar '.' else fail $ "Bad substring: " ++ res
     let q === want = check (want `isInfixOf`) q
     let q /== want = check (not . isInfixOf want) q

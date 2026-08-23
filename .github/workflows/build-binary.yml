@@ -1,8 +1,9 @@
 name: Build Binary
 
 # This file defines a workflow parameterized by OS that builds the bloogle
-# executable and uploads it as a tarball artifact. It is called from the
-# ci and release workflows.
+# executable, uploads it as a tarball artifact, and tests that artifact
+# end-to-end on a separate toolchain-free runner. It is called from the ci
+# and release workflows; a failing artifact test blocks the release.
 
 on:
   workflow_call:
@@ -54,3 +55,53 @@ jobs:
       with:
         name: bloogle-${{ inputs.os }}
         path: bloogle-${{ inputs.os }}.tar.gz
+
+  # Exercise the packaged binary end-to-end on a fresh runner with no Haskell
+  # toolchain set up and no cabal store: build a database from the sample
+  # data, search it, and serve it over HTTP. The serve step runs from an
+  # empty directory, so everything the server needs must come embedded in the
+  # binary itself -- this is what catches a binary that only works on the
+  # machine that built it. The sparse checkout materializes only the
+  # misc/sample-data fixture (plus root-level files): html/ is not on the
+  # runner's disk at all, so the server cannot be leaning on an on-disk copy.
+  test-artifact:
+    name: "Test artifact: ${{ inputs.os }}"
+    runs-on: ${{ inputs.os }}
+    timeout-minutes: 10
+    needs: build
+
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        sparse-checkout: misc/sample-data
+        filter: blob:none
+    - name: Download artifact
+      uses: actions/download-artifact@v8
+      with:
+        name: bloogle-${{ inputs.os }}
+    - name: Unpack
+      run: tar xzf bloogle-${{ inputs.os }}.tar.gz
+    - name: Test
+      shell: bash
+      run: |
+        ./bloogle --version
+        ./bloogle generate test.hoo misc/sample-data
+        ./bloogle test.hoo Wife | grep Wife
+        mkdir test-cwd
+        cd test-cwd
+        ../bloogle serve ../test.hoo --port 18080 &
+        SERVER=$!
+        trap 'kill $SERVER 2>/dev/null || true' EXIT
+        for _ in $(seq 1 30); do
+          curl -fsS -o /dev/null http://127.0.0.1:18080/ && break
+          sleep 1
+        done
+        home=$(curl -fsS http://127.0.0.1:18080/)
+        grep -F '<title>Bloogle</title>' <<<"$home"
+        if grep -F '#{' <<<"$home"; then echo 'unsubstituted template variable'; exit 1; fi
+        # 'type family' appears only in rendered search results, never in the
+        # html templates, so this fails if search comes back empty
+        curl -fsS 'http://127.0.0.1:18080/?bloogle=Wife' | grep -F 'type family'
+        curl -fsS http://127.0.0.1:18080/search.xml | grep -F '<ShortName>Bloogle</ShortName>'
+        curl -fsS -o /dev/null http://127.0.0.1:18080/bloogle.css
+        curl -fsS -o /dev/null http://127.0.0.1:18080/spinner.gif

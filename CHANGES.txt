@@ -3,6 +3,17 @@ Changelog for Bloogle (* = API change, @ = database format change)
 Bloogle is a Bluespec API search engine, forked from Hoogle 5.0.19. The
 Bloogle changes are listed first, followed by the inherited Hoogle changelog.
 
+0.1.1, released 2026-08-23
+    Embed the html/ assets into the binary, so the installed executable is
+        self-contained (previously it read them from Cabal's data-dir, which
+        made the release binaries fail on any machine but the one that built
+        them); --datadir now switches to on-disk assets for development
+    Smoketest the release binaries end-to-end (generate, search, serve) on
+        a fresh runner without a Haskell toolchain
+    Return 404 (not 400) for unknown static asset paths
+    Note: databases must be regenerated, because the version stamp baked
+        into .hoo files includes the full package version
+
 0.1.0, released 2026-07-09
     Rebrand as Bloogle, a Bluespec (Classic) API search engine: rename the
         package, binary, library module, web UI, docs, and search query param

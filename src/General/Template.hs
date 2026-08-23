@@ -5,6 +5,7 @@
 module General.Template
   ( Template,
     templateFile,
+    templateBStr,
     templateMarkup,
     templateApply,
     templateRender,
@@ -41,14 +42,16 @@ data Tree
 treeRemoveLam :: Tree -> IO Tree
 treeRemoveLam = transformM f
   where
-    f (Lam file) = List . parse <$> bstrReadFile file
+    f (Lam file) = List . parseVars <$> bstrReadFile file
     f x = pure x
 
-    parse x
-      | Just (a, b) <- bstrSplitInfix (bstrPack "#{") x,
-        Just (b', c) <- bstrSplitInfix (bstrPack "}") b =
-          Lit a : Var b' : parse c
-    parse x = [Lit x]
+-- | Split template text into literal chunks and #{foo} variables
+parseVars :: BStr -> [Tree]
+parseVars x
+  | Just (a, b) <- bstrSplitInfix (bstrPack "#{") x,
+    Just (b', c) <- bstrSplitInfix (bstrPack "}") b =
+      Lit a : Var b' : parseVars c
+parseVars x = [Lit x]
 
 treeRemoveApp :: Tree -> Tree
 treeRemoveApp = f []
@@ -110,6 +113,11 @@ templateTree t = Template t $ treeCache t
 
 templateFile :: FilePath -> Template
 templateFile = templateTree . Lam
+
+-- | Like 'templateFile' for template text already in memory: parses #{foo}
+--   variables, unlike 'templateStr' which takes the text literally.
+templateBStr :: BStr -> Template
+templateBStr = templateTree . List . parseVars
 
 templateMarkup :: Markup -> Template
 templateMarkup = templateStr . renderMarkup
