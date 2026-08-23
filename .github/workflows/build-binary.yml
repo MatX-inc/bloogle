@@ -61,7 +61,9 @@ jobs:
   # data, search it, and serve it over HTTP. The serve step runs from an
   # empty directory, so everything the server needs must come embedded in the
   # binary itself -- this is what catches a binary that only works on the
-  # machine that built it (the repo is checked out only for misc/sample-data).
+  # machine that built it. The sparse checkout materializes only the
+  # misc/sample-data fixture (plus root-level files): html/ is not on the
+  # runner's disk at all, so the server cannot be leaning on an on-disk copy.
   smoketest:
     name: "Smoketest: ${{ inputs.os }}"
     runs-on: ${{ inputs.os }}
@@ -70,6 +72,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v6
+      with:
+        sparse-checkout: misc/sample-data
+        filter: blob:none
     - name: Download artifact
       uses: actions/download-artifact@v8
       with:
