@@ -19,18 +19,24 @@ tested-with:        GHC==9.8, GHC==9.6, GHC==9.4
 extra-doc-files:
     README.md
     CHANGES.txt
+-- html/ is read at compile time by General.Embed, not installed as data-files.
+-- General.Embed embeds everything under html/ recursively, but these globs are
+-- flat and per-extension (cabal-version 1.18 has no ** and rejects multi-dot
+-- names like foo.min.js): keep them in sync with html/'s contents, or sdist
+-- builds will silently embed an incomplete UI.
 extra-source-files:
     cbits/*.h
     cbits/*.c
+    html/*.js
+    html/*.png
+    html/*.gif
+    html/*.css
+    html/*.xml
+    html/*.html
 data-files:
     misc/sample-data/henry.txt
     misc/sample-data/emily-1.11/emily.txt
     misc/sample-data/emily-1.2/emily.txt
-    html/*.js
-    html/*.png
-    html/*.css
-    html/*.xml
-    html/*.html
 
 source-repository head
     type:     git
@@ -58,6 +64,7 @@ library
         deepseq,
         directory,
         extra >= 1.6.6,
+        file-embed >= 0.0.11,
         filepath,
         ghc-lib-parser >= 9.6.5 && < 9.16,
         old-locale,
@@ -114,6 +121,7 @@ library
         Output.Types
         Query
         General.Conduit
+        General.Embed
         General.IString
         General.Log
         General.Store

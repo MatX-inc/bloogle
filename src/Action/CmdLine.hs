@@ -131,7 +131,7 @@ server =
       https = def &= help "Start an https server (use --cert and --key to specify paths to the .pem files)",
       cert = "cert.pem" &= typFile &= help "Path to the certificate pem file (when running an https server)",
       key = "key.pem" &= typFile &= help "Path to the key pem file (when running an https server)",
-      datadir = def &= help "Override data directory paths",
+      datadir = def &= typDir &= help "Serve the html assets from DIR/html instead of the copies embedded in the binary (they reload without a restart, for front-end development)",
       no_security_headers = False &= help "Don't send CSP security headers"
     }
     &= help "Start a Bloogle server"

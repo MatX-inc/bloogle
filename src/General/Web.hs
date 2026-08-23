@@ -78,7 +78,10 @@ data Output
   | OutputJavascript LBS.ByteString
   | OutputJSON Encoding
   | OutputFail LBS.ByteString
+  | OutputNotFound LBS.ByteString
   | OutputFile FilePath
+  | -- | Bytes embedded in the binary; the FilePath only picks the content-type
+    OutputStatic FilePath LBS.ByteString
   deriving (Show)
 
 -- | Force all the output (no delayed exceptions) and produce bytestrings
@@ -89,7 +92,9 @@ forceBS (OutputHTML x) = force x
 forceBS (OutputXML x) = force x
 forceBS (OutputJavascript x) = force x
 forceBS (OutputFail x) = force x
+forceBS (OutputNotFound x) = force x
 forceBS (OutputFile x) = rnf x `seq` LBS.empty
+forceBS (OutputStatic x y) = rnf x `seq` force y
 
 instance NFData Output where
   rnf x = forceBS x `seq` ()
@@ -196,9 +201,15 @@ server log' Server {..} act = do
             ([("content-type", c) | Just c <- [lookup (takeExtension file) contentType]] ++ secH)
             file
             Nothing
+        OutputStatic file _ ->
+          responseLBS
+            status200
+            ([("content-type", c) | Just c <- [lookup (takeExtension file) contentType]] ++ secH)
+            bs
         OutputText {} -> responseLBS status200 (("content-type", "text/plain") : secH) bs
         OutputJSON {} -> responseLBS status200 (("content-type", "application/json") : ("access-control-allow-origin", "*") : secH) bs
         OutputFail {} -> responseLBS status400 (("content-type", "text/plain") : secH) bs
+        OutputNotFound {} -> responseLBS status404 (("content-type", "text/plain") : secH) bs
         OutputHTML {} -> responseLBS status200 (("content-type", "text/html") : secH) bs
         OutputXML {} -> responseLBS status200 (("content-type", "application/opensearchdescription+xml") : secH) bs
         OutputJavascript {} -> responseLBS status200 (("content-type", "text/javascript") : secH) bs
