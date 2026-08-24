@@ -43,6 +43,23 @@ jobs:
     - run: cabal run bloogle -- test
 
   # ------------------------------
+  # Nix flake: `nix flake check` builds the package via the flake and runs
+  # the test suite from it. The flake pins its own nixpkgs snapshot, so this
+  # catches drift the cabal jobs cannot: a bloogle.cabal change the pinned
+  # package set cannot satisfy, or a broken/removed ghc967 set after a
+  # `nix flake update`.
+
+  nix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+    - uses: actions/checkout@v6
+    - uses: cachix/install-nix-action@v31
+      with:
+        extra_nix_config: experimental-features = nix-command flakes
+    - run: nix flake check -L
+
+  # ------------------------------
   # Binary builds for every commit
 
   binaries:

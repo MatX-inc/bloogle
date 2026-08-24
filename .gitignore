@@ -6,3 +6,6 @@ log.txt
 *.prof
 /.stack-work/
 /issues/
+.direnv/
+result
+result-*
