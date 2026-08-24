@@ -3,6 +3,11 @@ Changelog for Bloogle (* = API change, @ = database format change)
 Bloogle is a Bluespec API search engine, forked from Hoogle 5.0.19. The
 Bloogle changes are listed first, followed by the inherited Hoogle changelog.
 
+Unreleased
+    Add a nix flake: a package build, a dev shell with haskell-language-server
+        and cabal-install (direnv-ready via .envrc), and a selftest check that
+        runs the test suite; CI runs `nix flake check` on every push
+
 0.1.1, released 2026-08-23
     Embed the html/ assets into the binary, so the installed executable is
         self-contained (previously it read them from Cabal's data-dir, which
