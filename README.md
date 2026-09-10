@@ -52,6 +52,12 @@ The source directory is a required positional argument; `bloogle` reads the
 `.txt` (and any `.cabal`) files under it. Generating from an online package set
 is not supported.
 
+Generation is quiet by default: the only output is warnings about the input
+(lines it could not parse, `.txt` files without a matching `@package` header,
+and problems with any `.cabal` files), printed to stderr. Pass `--verbose` to
+also see per-package progress and timings, or `--quiet` to suppress the
+warnings too.
+
 ### Search from the command line
 
     $ bloogle search bluespec.hoo "Vector n a -> a"
