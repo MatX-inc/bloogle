@@ -3,7 +3,7 @@ Changelog for Bloogle (* = API change, @ = database format change)
 Bloogle is a Bluespec API search engine, forked from Hoogle 5.0.19. The
 Bloogle changes are listed first, followed by the inherited Hoogle changelog.
 
-Unreleased
+0.1.2, released 2026-09-10
     Make `generate` quiet by default: per-package progress and timings are
         only printed with --verbose, and parse warnings are printed to stderr
         as they are found instead of being written to a .warn file next to
@@ -12,6 +12,8 @@ Unreleased
     Add a nix flake: a package build, a dev shell with haskell-language-server
         and cabal-install (direnv-ready via .envrc), and a selftest check that
         runs the test suite; CI runs `nix flake check` on every push
+    Note: databases must be regenerated, as with every release, because the
+        version stamp baked into .hoo files includes the full package version
 
 0.1.1, released 2026-08-23
     Embed the html/ assets into the binary, so the installed executable is
