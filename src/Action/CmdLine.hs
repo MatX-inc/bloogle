@@ -16,6 +16,7 @@ import Data.Version
 import Paths_bloogle (version)
 import System.Console.CmdArgs
 import System.Environment
+import System.IO (hPutStrLn, stderr)
 
 data CmdLine
   = Search
@@ -74,7 +75,7 @@ getCmdLine argv = do
   -- fix up people using Hoogle 4 instructions
   case args1 of
     Generate {..} | "all" `elem` include -> do
-      putStrLn "Warning: 'all' argument is no longer required, and has been ignored."
+      hPutStrLn stderr "Warning: 'all' argument is no longer required, and has been ignored."
       pure $ args1 {include = delete "all" include}
     _ -> pure args1
 

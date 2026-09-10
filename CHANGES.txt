@@ -4,6 +4,11 @@ Bloogle is a Bluespec API search engine, forked from Hoogle 5.0.19. The
 Bloogle changes are listed first, followed by the inherited Hoogle changelog.
 
 Unreleased
+    Make `generate` quiet by default: per-package progress and timings are
+        only printed with --verbose, and parse warnings are printed to stderr
+        as they are found instead of being written to a .warn file next to
+        the database (which is no longer created); --quiet silences the
+        warnings too, and the remaining diagnostics move from stdout to stderr
     Add a nix flake: a package build, a dev shell with haskell-language-server
         and cabal-install (direnv-ready via .envrc), and a selftest check that
         runs the test suite; CI runs `nix flake check` on every push

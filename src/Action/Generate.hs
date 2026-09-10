@@ -121,8 +121,8 @@ readHaskellDirs _timing dirs = do
         setFromDir dir = (strPack "set", strPack $ takeFileName $ dropTrailingPathSeparator dir)
 
 actionGenerate :: CmdLine -> IO ()
-actionGenerate _g@Generate {..} = withTiming (if debug then Just $ replaceExtension database "timing" else Nothing) $ \timing -> do
-  putStrLn "Starting generate"
+actionGenerate _g@Generate {..} = withTiming' $ \timing -> do
+  whenLoud $ putStrLn "Starting generate"
   createDirectoryIfMissing True $ takeDirectory database
   whenLoud $ putStrLn $ "Generating files to " ++ takeDirectory database
 
@@ -135,18 +135,18 @@ actionGenerate _g@Generate {..} = withTiming (if debug then Just $ replaceExtens
   want'' <- pure $ case count of Nothing -> want'; Just count' -> Set.fromList $ take count' $ Set.toList want'
 
   (stats, _) <- storeWriteFile database $ \store -> do
-    xs <- withBinaryFile (database `replaceExtension` "warn") WriteMode $ \warnings -> do
-      hSetEncoding warnings utf8
-      hPutStr warnings $ unlines cblErrs
-      _nCblErrs <- evaluate $ length cblErrs
+    xs <- do
+      -- Warnings go to stderr as they are found, unless --quiet.
+      let warning msg = whenNormal $ hPutStrLn stderr msg
+      mapM_ warning cblErrs
 
       itemWarn <- newIORef (0 :: Integer)
-      let warning msg = do modifyIORef itemWarn succ; hPutStrLn warnings msg
+      let itemWarning msg = do modifyIORef itemWarn succ; warning msg
 
       let consume :: ConduitM (Int, (PkgName, URL, LBStr)) (Maybe Target, [Item]) IO ()
           consume = awaitForever $ \(i, (unPackageName -> pkg, url, body)) -> do
             timedOverwrite timing ("[" ++ show i ++ "/" ++ show (Set.size want'') ++ "] " ++ pkg) $
-              parseHoogle (\msg -> warning $ pkg ++ ":" ++ msg) url body
+              parseHoogle (\msg -> itemWarning $ pkg ++ ":" ++ msg) url body
 
       writeItems store $ \items -> do
         xs <-
@@ -163,9 +163,9 @@ actionGenerate _g@Generate {..} = withTiming (if debug then Just $ replaceExtens
                               | x <- Set.toList $ want'' `Set.difference` seen,
                                 fmap packageLibrary (Map.lookup x cbl') /= Just False
                               ]
-                        liftIO $ putStrLn ""
+                        liftIO $ whenLoud $ putStrLn "" -- end the progress line
                         liftIO $ whenNormal $ when (missing /= []) $ do
-                          putStrLn $ "Packages missing documentation: " ++ unwords (sortOn lower $ map unPackageName missing)
+                          hPutStrLn stderr $ "Packages missing documentation: " ++ unwords (sortOn lower $ map unPackageName missing)
                         liftIO $
                           when (Set.null seen) $
                             exitFail "No packages were found in the source directory, aborting"
@@ -190,8 +190,9 @@ actionGenerate _g@Generate {..} = withTiming (if debug then Just $ replaceExtens
 
         itemWarn' <- readIORef itemWarn
         when (itemWarn' > 0) $
-          putStrLn $
-            "Found " ++ show itemWarn' ++ " warnings when processing items"
+          whenNormal $
+            hPutStrLn stderr $
+              "Found " ++ show itemWarn' ++ " warning" ++ ['s' | itemWarn' /= 1] ++ " when processing items"
         pure [(a, b) | (a, bs) <- xs, b <- bs]
 
     itemsMemory <- getStatsCurrentLiveBytes
@@ -200,14 +201,19 @@ actionGenerate _g@Generate {..} = withTiming (if debug then Just $ replaceExtens
     timed timing "Writing names" $ writeNames store xs'
     timed timing "Writing types" $ writeTypes store (if debug then Just $ dropExtension database else Nothing) xs'
 
-    x <- getVerbosity
-    when (x >= Loud) $
+    whenLoud $ do
       whenJustM getStatsDebug print
-    when (x >= Normal) $ do
-      whenJustM getStatsPeakAllocBytes $ \x' ->
-        putStrLn $ "Peak of " ++ x' ++ ", " ++ fromMaybe "unknown" itemsMemory ++ " for items"
+      whenJustM getStatsPeakAllocBytes $ \x ->
+        putStrLn $ "Peak of " ++ x ++ ", " ++ fromMaybe "unknown" itemsMemory ++ " for items"
 
   when debug $
     writeFile (database `replaceExtension` "store") $
       unlines stats
+  where
+    -- Progress and timings are only printed under --verbose. By default the
+    -- only output is warnings (on stderr), so a build system's action output
+    -- stays quiet unless something needs attention.
+    withTiming' act = do
+      verbose <- isLoud
+      withTiming verbose (if debug then Just $ replaceExtension database "timing" else Nothing) act
 actionGenerate _ = error "actionGenerate: expected Generate"
